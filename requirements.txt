@@ -1,0 +1,10 @@
+ultralytics
+supervision
+opencv-python
+streamlit
+streamlit-webrtc
+numpy
+pandas
+pillow
+python-dotenv
+twilio
