@@ -6,23 +6,29 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("AI-Based Smart Traffic Monitoring System")
+st.title("🚦 AI-Based Smart Traffic Monitoring System")
 
 st.write(
-    "AI-powered traffic monitoring using YOLOv8 and ByteTrack."
+    "YOLOv8 + ByteTrack Traffic Monitoring"
 )
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.metric("Vehicles", 0)
+    st.metric("Vehicles", "Live")
 
 with col2:
-    st.metric("Violations", 0)
+    st.metric("Tracked IDs", "Live")
 
 with col3:
-    st.metric("Emergency Vehicles", 0)
+    st.metric("Violations", 0)
 
-st.subheader("Traffic Camera")
+st.subheader("Detection Pipeline")
 
-st.info("Camera feed will be integrated in Week 2.")
+st.success(
+    "YOLOv8 vehicle detection and ByteTrack tracking ready."
+)
+
+st.info(
+    "Violation detection will be implemented in the next development stage."
+)
