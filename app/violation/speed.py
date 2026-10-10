@@ -1,4 +1,4 @@
-
+from app.violation.violation_logger import log_violation
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -189,6 +189,15 @@ def main():
                                 save_violation(
                                     track_id, speed_kmh, evidence_path
                                 )
+                                inserted = log_violation(
+                                    event_key=f"speeding:{track_id}:{frame_number}",
+                                    track_id=track_id,
+                                    violation_type="speeding",
+                                    evidence_path=str(evidence_path),
+                                    speed=speed_kmh,
+                                    speed_limit=SPEED_LIMIT_KMH,
+                                )
+                                print("Speeding record inserted:", inserted)
                                 reported_tracks.add(track_id)
 
                 previous_y[track_id] = bottom_y
