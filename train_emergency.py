@@ -1,8 +1,7 @@
 
-from ultralytics import YOLO
+import ultralytics
 
-
-model = YOLO("yolov8n.pt")
+model = ultralytics.YOLO("yolov8n.pt")
 
 model.train(
     data="data/emergency_vehicle/data.yaml",

@@ -1,7 +1,6 @@
-from ultralytics import YOLO
+import ultralytics
 
-
-model = YOLO("models/emergency_vehicle.pt")
+model = ultralytics.YOLO("models/emergency_vehicle.pt")
 
 results = model("data/images/test.jpg")
 
