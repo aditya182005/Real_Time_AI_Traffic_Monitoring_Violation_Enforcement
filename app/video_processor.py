@@ -1,7 +1,11 @@
+from pathlib import Path
+
 import cv2
 
 from app.detection.detector import VehicleDetector
 from app.tracking.tracker import VehicleTracker
+from app.violation.database import save_violation
+from app.violation.red_light import RedLightDetector
 
 
 class TrafficVideoProcessor:
@@ -33,6 +37,12 @@ class TrafficVideoProcessor:
             (width, height)
         )
 
+        stop_line_y = 300
+        signal_state = "RED"  # Simulated signal for initial testing
+        violation_detector = RedLightDetector(stop_line_y)
+        evidence_dir = Path("outputs/violations")
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+
         while True:
 
             ret, frame = cap.read()
@@ -58,6 +68,18 @@ class TrafficVideoProcessor:
                 )
 
                 class_id = int(tracked.class_id[i])
+
+                if track_id != -1 and violation_detector.check(
+                    track_id,
+                    y2,
+                    signal_state
+                ):
+                    evidence_path = evidence_dir / (
+                        f"red_light_id_{track_id}.jpg"
+                    )
+                    cv2.imwrite(str(evidence_path), frame)
+                    save_violation(track_id, signal_state, evidence_path)
+                    print(f"Red-light crossing detected: ID {track_id}")
 
                 names = {
                     2: "car",
@@ -88,6 +110,14 @@ class TrafficVideoProcessor:
                     (0, 255, 0),
                     2
                 )
+
+            cv2.line(
+                frame,
+                (0, stop_line_y),
+                (frame.shape[1], stop_line_y),
+                (0, 0, 255),
+                2
+            )
 
             out.write(frame)
 
