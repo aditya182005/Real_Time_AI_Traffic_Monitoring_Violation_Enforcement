@@ -1,0 +1,9 @@
+path:  D:/projects/Real_Time_AI_Traffic_Monitoring_Violation_Enforcement/data/emergency_vehicle
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: ambulance
+  1: fire_truck
+  2: police_car

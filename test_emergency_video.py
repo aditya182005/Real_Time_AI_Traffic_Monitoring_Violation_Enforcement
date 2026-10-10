@@ -1,0 +1,30 @@
+from ultralytics import YOLO
+import cv2
+
+
+model = YOLO("models/emergency_vehicle.pt")
+
+cap = cv2.VideoCapture("data/videos/traffic.mp4")
+
+while True:
+
+    ret, frame = cap.read()
+
+    if not ret:
+        break
+
+    results = model(frame, verbose=False)
+
+    annotated = results[0].plot()
+
+    cv2.imshow(
+        "Emergency Vehicle Detection",
+        annotated
+    )
+
+    if cv2.waitKey(1) & 0xFF == ord("q"):
+        break
+
+
+cap.release()
+cv2.destroyAllWindows()
