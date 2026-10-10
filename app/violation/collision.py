@@ -2,6 +2,7 @@
 import cv2
 import sqlite3
 import os
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
 VIDEO_PATH = ROOT / "data" / "videos" / "traffic.mp4"
-MODEL_PATH = ROOT / "yolov8n.pt"
+# Bare model name: Ultralytics downloads it on first use (*.pt is git-ignored).
+MODEL_PATH = "yolov8n.pt"
 DB_PATH = ROOT / "traffic_agent.db"
 OUTPUT_DIR = ROOT / "outputs" / "collisions"
 
@@ -84,13 +86,10 @@ def main():
     if not VIDEO_PATH.exists():
         raise FileNotFoundError(f"Video not found: {VIDEO_PATH}")
 
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"Model not found: {MODEL_PATH}")
-
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     setup_database()
 
-    model = YOLO(str(MODEL_PATH))
+    model = YOLO(MODEL_PATH)
     tracker = sv.ByteTrack()
     cap = cv2.VideoCapture(str(VIDEO_PATH))
 
@@ -209,7 +208,15 @@ def main():
             )
 
             print(message)
-            send_sms(message)
+
+            # Twilio is a network call; run it off the video loop so the
+            # frame rate does not stall while the SMS is submitted. The
+            # thread is non-daemon so an SMS in flight still completes if
+            # the video ends right after the alert.
+            threading.Thread(
+                target=send_sms,
+                args=(message,)
+            ).start()
 
         cv2.imshow("Traffic Agent - Collision Monitoring", frame)
 

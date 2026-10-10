@@ -97,42 +97,35 @@ The project aims to improve **traffic flow, road safety, traffic-rule enforcemen
 Traffic-Agent/
 │
 ├── app/
-│   ├── main.py
-│   ├── video_processor.py
+│   ├── main.py                    # Streamlit dashboard
+│   ├── video_processor.py         # detect + track + red-light pipeline
 │   │
-│   ├── detection/
-│   │   └── detector.py
-│   │
-│   ├── tracking/
-│   │   └── tracker.py
+│   ├── detection/detector.py      # YOLOv8 vehicle detection
+│   ├── tracking/tracker.py        # ByteTrack tracking
 │   │
 │   ├── violation/
-│   │   └── violation_detector.py
+│   │   ├── red_light.py           # stop-line crossing logic
+│   │   ├── speed.py               # two-line speed estimation (script)
+│   │   ├── collision.py           # overlap-based collision alerts + Twilio (script)
+│   │   └── violation_logger.py    # unified violation_records table + demo fines
 │   │
-│   ├── emergency/
-│   │   └── signal_priority.py
-│   │
-│   ├── collision/
-│   │   └── collision_detector.py
-│   │
-│   ├── alerts/
-│   │   └── twilio_alert.py
-│   │
-│   └── database/
-│       └── database.py
+│   ├── emergency/signal_priority.py   # emergency-vehicle priority simulation (script)
+│   └── database/database.py           # legacy tables + init
 │
 ├── data/
 │   ├── images/
 │   ├── videos/
-│   └── emergency_vehicle/
+│   └── emergency_vehicle/         # YOLO dataset (data.yaml)
 │
-├── models/
-├── outputs/
-├── tests/
+├── models/                        # put emergency_vehicle.pt here (git-ignored)
+├── outputs/                       # generated evidence/videos (git-ignored)
+├── tests/                         # pytest tests
 │
-├── requirements.txt
-├── .env
-├── .gitignore
+├── init_database.py
+├── run_video.py
+├── train_emergency.py
+├── requirements.txt / requirements-dev.txt
+├── .env.example                   # copy to .env for Twilio
 └── README.md
 ```
 
@@ -265,41 +258,65 @@ Add the dashboard screenshot when the dashboard UI is further developed:
 ### 1. Clone the repository
 
 ```bash
-git clone YOUR_REPOSITORY_URL
-cd Traffic-Agent
+git clone https://github.com/aditya182005/Real_Time_AI_Traffic_Monitoring_Violation_Enforcement.git
+cd Real_Time_AI_Traffic_Monitoring_Violation_Enforcement
 ```
 
-### 2. Create virtual environment
+### 2. Create and activate a virtual environment
 
 ```bash
 python -m venv venv
 ```
 
-### 3. Activate environment
+Windows PowerShell: `venv\Scripts\activate` — macOS/Linux: `source venv/bin/activate`
 
-Windows PowerShell:
-
-```powershell
-venv\Scripts\activate
-```
-
-### 4. Install dependencies
+### 3. Install dependencies
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt        # add -r requirements-dev.txt for tests
 ```
 
-### 5. Run traffic-video detection
+`yolov8n.pt` is downloaded automatically by Ultralytics on first run.
+
+### 4. (Optional) Twilio alerts
 
 ```bash
-python run_video.py
+cp .env.example .env     # then fill in the Twilio values
 ```
 
-### 6. Run Streamlit
+Without these, collision alerts are still logged; only the SMS is skipped.
+
+### 5. Run the modules
+
+Run everything from the project root so relative paths resolve.
 
 ```bash
-streamlit run app/main.py
+python init_database.py                       # create tables (optional; created on demand)
+python run_video.py --no-display              # detection + tracking + red-light check
+python -m app.violation.speed                 # speed estimation
+python -m app.violation.collision             # possible-collision monitoring
+python -m app.emergency.signal_priority       # needs models/emergency_vehicle.pt
+streamlit run app/main.py                     # dashboard
 ```
+
+Stop-line position (`--stop-line-y`), the speed-measurement lines/distance and
+the emergency ROI are hard-coded for the sample video — recalibrate them for
+your own footage.
+
+### 6. Run the tests
+
+```bash
+pytest
+```
+
+### Training the emergency-vehicle model
+
+```bash
+python train_emergency.py
+```
+
+Ultralytics saves weights to `runs/detect/emergency_vehicle/weights/best.pt`;
+copy that file to `models/emergency_vehicle.pt` for the priority module.
 
 ---
 

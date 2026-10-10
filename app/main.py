@@ -28,7 +28,7 @@ st.set_page_config(
 
 TABLES = {
     "Unified Violations": "violation_records",
-    "Red-Light Violations (Legacy)": "violations",
+    # Older databases only; the speed script no longer writes here.
     "Speeding Violations (Legacy)": "speed_violations",
     "Emergency Priority Events": "priority_events",
     "Collision Events": "collision_events",
@@ -188,10 +188,25 @@ data = {
 }
 
 unified_df = data["Unified Violations"]
-red_light_df = data["Red-Light Violations (Legacy)"]
-speed_df = data["Speeding Violations (Legacy)"]
+legacy_speed_df = data["Speeding Violations (Legacy)"]
 priority_df = data["Emergency Priority Events"]
 collision_df = data["Collision Events"]
+
+
+def by_type(df, violation_type):
+    """Rows of the unified table for one violation type."""
+
+    if df.empty or "violation_type" not in df.columns:
+        return df.iloc[0:0].copy()
+
+    return df[df["violation_type"].astype(str) == violation_type].copy()
+
+
+# Red-light and speeding records are both written to the unified table.
+# (The dashboard used to read a separate red-light table that no script
+# ever wrote to, so that tab was always empty.)
+red_light_df = by_type(unified_df, "red_light")
+speed_df = by_type(unified_df, "speeding")
 
 
 # --------------------------------------------------
@@ -225,17 +240,17 @@ st.header("Dashboard Overview")
 col1, col2, col3, col4 = st.columns(4)
 
 col1.metric(
-    "Unified Violations",
+    "Total Violations",
     count_records(unified_df),
 )
 
 col2.metric(
-    "Legacy Red-Light Events",
+    "Red-Light Violations",
     count_records(red_light_df),
 )
 
 col3.metric(
-    "Legacy Speeding Events",
+    "Speeding Violations",
     count_records(speed_df),
 )
 
@@ -244,8 +259,7 @@ col4.metric(
     count_records(collision_df),
 )
 
-# Fine totals use only the unified table to avoid
-# counting legacy records twice.
+# Fine totals use only the unified table.
 
 fine_total = 0
 
@@ -366,17 +380,25 @@ tab_red, tab_speed, tab_priority, tab_collision, tab_evidence = st.tabs(
 with tab_red:
     show_records(
         red_light_df,
-        "Red-Light Violation Events (Legacy)",
-        "red_light_events.csv",
+        "Red-Light Violations",
+        "red_light_violations.csv",
     )
 
 
 with tab_speed:
     show_records(
         speed_df,
-        "Speeding Events (Legacy)",
-        "speeding_events.csv",
+        "Speeding Violations",
+        "speeding_violations.csv",
     )
+
+    if not legacy_speed_df.empty:
+        with st.expander("Older speeding records (legacy table)"):
+            show_records(
+                legacy_speed_df,
+                "Speeding Records (Legacy Table)",
+                "speeding_events_legacy.csv",
+            )
 
 
 with tab_priority:
@@ -414,7 +436,7 @@ with tab_evidence:
 
     evidence_sources = []
 
-    # Unified violation evidence
+    # Unified violation evidence (red-light and speeding)
     if (
         not unified_df.empty
         and "evidence_path" in unified_df.columns
@@ -423,21 +445,12 @@ with tab_evidence:
         temp["source"] = "Unified Violation"
         evidence_sources.append(temp)
 
-    # Legacy red-light evidence
+    # Legacy speeding evidence (older databases)
     if (
-        not red_light_df.empty
-        and "evidence_path" in red_light_df.columns
+        not legacy_speed_df.empty
+        and "evidence_path" in legacy_speed_df.columns
     ):
-        temp = red_light_df.copy()
-        temp["source"] = "Red-Light (Legacy)"
-        evidence_sources.append(temp)
-
-    # Legacy speeding evidence
-    if (
-        not speed_df.empty
-        and "evidence_path" in speed_df.columns
-    ):
-        temp = speed_df.copy()
+        temp = legacy_speed_df.copy()
         temp["source"] = "Speeding (Legacy)"
         evidence_sources.append(temp)
 

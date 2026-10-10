@@ -1,5 +1,5 @@
-
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,22 +13,32 @@ BASE_SPEED_FINE = 500
 EXTRA_SPEED_FINE_PER_10_KMH = 100
 
 
+def _connect():
+    # DB_PATH is looked up at call time so tests can point it elsewhere.
+    return closing(sqlite3.connect(DB_PATH))
+
+
+def _create_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS violation_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_key TEXT NOT NULL UNIQUE,
+            track_id INTEGER NOT NULL,
+            violation_type TEXT NOT NULL,
+            measured_speed REAL,
+            speed_limit REAL,
+            signal_state TEXT,
+            fine_amount INTEGER NOT NULL,
+            timestamp TEXT NOT NULL,
+            evidence_path TEXT
+        )
+    """)
+
+
 def setup_database():
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS violation_records (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                event_key TEXT NOT NULL UNIQUE,
-                track_id INTEGER NOT NULL,
-                violation_type TEXT NOT NULL,
-                measured_speed REAL,
-                speed_limit REAL,
-                signal_state TEXT,
-                fine_amount INTEGER NOT NULL,
-                timestamp TEXT NOT NULL,
-                evidence_path TEXT
-            )
-        """)
+    with _connect() as conn:
+        _create_table(conn)
+        conn.commit()
 
 
 def calculate_fine(violation_type, speed=None, speed_limit=None):
@@ -61,6 +71,13 @@ def log_violation(
     speed_limit=None,
     signal_state=None
 ):
+    """Insert a violation. Returns True if a new row was written.
+
+    The table is created on demand: previously callers such as the red-light
+    and speed pipelines never called ``setup_database()`` and crashed with
+    "no such table: violation_records" on the first violation.
+    """
+
     fine = calculate_fine(
         violation_type,
         speed,
@@ -72,7 +89,9 @@ def log_violation(
 
     timestamp = datetime.now(timezone.utc).isoformat()
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with _connect() as conn:
+        _create_table(conn)
+
         cursor = conn.execute("""
             INSERT OR IGNORE INTO violation_records (
                 event_key,
@@ -97,5 +116,7 @@ def log_violation(
             timestamp,
             str(evidence_path) if evidence_path else None
         ))
+
+        conn.commit()
 
         return cursor.rowcount == 1
