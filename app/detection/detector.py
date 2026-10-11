@@ -18,14 +18,16 @@ class VehicleDetector:
             7: "truck"
         }
 
-    def detect(self, frame):
+    def detect(self, frame, conf=None):
 
         # Filter by class inside the model call instead of post-filtering,
         # and use the same confidence as the other modules (speed/collision).
+        # `conf` overrides the default per call (e.g. a UI slider) so one
+        # loaded model can be reused.
         results = self.model(
             frame,
             classes=list(self.vehicle_classes),
-            conf=self.confidence,
+            conf=self.confidence if conf is None else conf,
             verbose=False
         )[0]
 

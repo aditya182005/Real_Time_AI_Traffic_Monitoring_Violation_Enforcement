@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -45,6 +46,10 @@ def main():
         raise ValueError("Could not read video FPS.")
 
     frame_number = 0
+
+    # Event keys must be unique per run: track IDs and frame numbers repeat
+    # between runs, and a repeated key is silently ignored by the database.
+    run_id = uuid.uuid4().hex[:8]
 
     # Track ID -> first line crossing frame.
     line_a_frames = {}
@@ -157,7 +162,7 @@ def main():
                                     str(evidence_path), frame
                                 )
                                 inserted = log_violation(
-                                    event_key=f"speeding:{track_id}:{frame_number}",
+                                    event_key=f"speeding:{run_id}:{track_id}:{frame_number}",
                                     track_id=track_id,
                                     violation_type="speeding",
                                     evidence_path=str(evidence_path),

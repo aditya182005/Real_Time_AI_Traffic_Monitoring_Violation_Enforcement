@@ -24,6 +24,29 @@ The project aims to improve **traffic flow, road safety, traffic-rule enforcemen
 
 ---
 
+## ✨ What You Can Do With It
+
+* **Upload your own footage.** Open **Analyze footage** and drop in traffic
+  **photos** (JPG, PNG, BMP, WebP) or a **video** (MP4, AVI, MOV, MKV). Photos
+  get vehicle counts and annotated downloads. Videos get the full pipeline, a
+  live annotated preview, and an annotated video to play or download.
+* **Place the lines on your own camera view.** Stop line, speed lines and the
+  wrong-way lane are sliders in percent of the frame, drawn on the first
+  frame, so they work at any resolution.
+* **Checks you can switch on:** red light (against a simulated signal that is
+  always red, always green, or cycles), speeding (two lines a known distance
+  apart), wrong way, possible collisions (overlap **and** a sharp slowdown),
+  and emergency-vehicle priority (turns the simulated signal green).
+* **Everything is saved** to SQLite with annotated evidence and a cropped
+  photo of the vehicle, and shown on the **Dashboard**, **Evidence** and
+  **Alerts** pages: violations per hour, traffic density, violation types,
+  filterable records, CSV export, and Twilio alert status.
+* **Alerts are opt-in.** Collision SMS (and optional voice call) go out only
+  when Twilio is configured **and** you turn alerts on for that run. They
+  include the camera name and a UTC timestamp.
+
+---
+
 ## 🎯 Project Goals
 
 * Detect vehicles from traffic-camera video in real time.
@@ -97,32 +120,45 @@ The project aims to improve **traffic flow, road safety, traffic-rule enforcemen
 Traffic-Agent/
 │
 ├── app/
-│   ├── main.py                    # Streamlit dashboard
-│   ├── video_processor.py         # detect + track + red-light pipeline
+│   ├── main.py                    # Streamlit entry point (sidebar pages)
+│   ├── video_processor.py         # unified per-frame pipeline for a video
+│   ├── analysis.py                # image analysis + video settings
+│   ├── media.py                   # upload validation, image decode, H.264 re-encode
+│   ├── annotate.py                # drawing boxes, banners, calibration lines
 │   │
-│   ├── detection/detector.py      # YOLOv8 vehicle detection
+│   ├── ui/                        # dashboard pages
+│   │   ├── upload.py              # Analyze footage (images + video upload)
+│   │   ├── dashboard.py           # KPIs and analytics charts
+│   │   ├── evidence.py            # evidence gallery
+│   │   ├── alerts.py              # collision alerts + Twilio status
+│   │   ├── about.py, theme.py, analytics.py, data.py, helpers.py
+│   │
+│   ├── detection/
+│   │   ├── detector.py            # YOLOv8 vehicle detection
+│   │   └── emergency_detector.py  # custom emergency-vehicle model
 │   ├── tracking/tracker.py        # ByteTrack tracking
 │   │
 │   ├── violation/
-│   │   ├── red_light.py           # stop-line crossing logic
-│   │   ├── speed.py               # two-line speed estimation (script)
-│   │   ├── collision.py           # overlap-based collision alerts + Twilio (script)
-│   │   └── violation_logger.py    # unified violation_records table + demo fines
+│   │   ├── red_light.py           # stop-line crossing
+│   │   ├── signal.py              # simulated signal (fixed or cycle)
+│   │   ├── speed_estimator.py     # two-line speed measurement
+│   │   ├── wrong_way.py           # against-traffic movement
+│   │   ├── collision_logic.py     # overlap + sharp-slowdown heuristic
+│   │   ├── violation_logger.py    # SQLite tables, demo fines, migrations
+│   │   ├── speed.py, collision.py # standalone scripts
 │   │
-│   ├── emergency/signal_priority.py   # emergency-vehicle priority simulation (script)
-│   └── database/database.py           # legacy tables + init
+│   ├── emergency/signal_priority.py   # standalone emergency-priority script
+│   ├── alerts/twilio_alert.py         # SMS / voice alerts, status logging
+│   └── database/database.py           # legacy tables
 │
-├── data/
-│   ├── images/
-│   ├── videos/
-│   └── emergency_vehicle/         # YOLO dataset (data.yaml)
-│
+├── data/                          # sample video, images, emergency dataset
 ├── models/                        # put emergency_vehicle.pt here (git-ignored)
-├── outputs/                       # generated evidence/videos (git-ignored)
-├── tests/                         # pytest tests
+├── outputs/                       # generated evidence, videos, uploads (git-ignored)
+├── tests/                         # pytest / unittest tests
+├── .streamlit/config.toml         # theme and the 200 MB upload limit
 │
+├── run_video.py                   # command-line runner for the whole pipeline
 ├── init_database.py
-├── run_video.py
 ├── train_emergency.py
 ├── requirements.txt / requirements-dev.txt
 ├── .env.example                   # copy to .env for Twilio
@@ -133,33 +169,23 @@ Traffic-Agent/
 
 ## 📊 Current Status
 
-### Week 1 — ✅ Completed
+All modules in the preparation plan have code, tests and a place in the
+dashboard. What has **not** been done is validation on real footage: the
+automated tests use stand-in detectors, so thresholds still need tuning on
+your own videos.
 
-* [x] Project structure created
-* [x] Python virtual environment configured
-* [x] Required dependencies installed
-* [x] YOLOv8 tested
-* [x] SQLite database initialized
-* [x] Initial Streamlit application created
-
-### Week 2 — ✅ Completed
-
-* [x] YOLOv8 vehicle detection
-* [x] Car detection
-* [x] Truck detection
-* [x] Bus detection
-* [x] Motorcycle detection
-* [x] ByteTrack integration
-* [x] Persistent vehicle tracking IDs
-* [x] Traffic video processing pipeline
-* [x] Annotated output video generation
-* [x] Initial Streamlit integration
-
-### Current Development Status
-
-**Detection and tracking modules are complete.**
-
-The project is currently moving toward the **emergency-vehicle detection and downstream traffic-analysis modules**.
+| Area | State |
+| ---- | ----- |
+| Vehicle detection (YOLOv8) and tracking (ByteTrack) | ✅ Implemented |
+| Red-light, speeding and wrong-way checks, fine records | ✅ Implemented |
+| Collision heuristic (overlap + sharp slowdown, several frames) | ✅ Implemented |
+| Twilio SMS / voice alerts with camera ID and timestamp | ✅ Implemented (needs your Twilio account to try) |
+| Simulated signal and emergency-vehicle override | ✅ Implemented |
+| Streamlit dashboard, evidence and alerts pages | ✅ Implemented |
+| Upload of images and videos | ✅ Implemented |
+| Emergency-vehicle **model weights** | ⏳ Train with `train_emergency.py` (not in git) |
+| Accuracy evaluation (mAP, precision/recall on labelled clips) | ⏳ Not done |
+| Report, slides, demo video | ⏳ Not done |
 
 ---
 
@@ -209,47 +235,44 @@ Add the dashboard screenshot when the dashboard UI is further developed:
 
 ## 🗺️ Roadmap
 
-```markdown
-## Roadmap
-
 - [x] Project setup
 - [x] YOLOv8 vehicle detection
 - [x] ByteTrack vehicle tracking
-- [ ] Custom emergency vehicle detection
-- [ ] Emergency signal prioritization
-- [ ] Red-light violation detection
-- [ ] Speed violation detection
-- [ ] Fine record generation
-- [ ] Collision detection
-- [ ] SQLite event logging
-- [ ] Streamlit dashboard
-- [ ] Twilio call/SMS alerts
-- [ ] End-to-end integration
-- [ ] Performance testing
+- [x] Red-light violation detection
+- [x] Speed violation detection
+- [x] Wrong-way detection
+- [x] Fine record generation
+- [x] Collision detection
+- [x] SQLite event logging
+- [x] Streamlit dashboard
+- [x] Upload of images and videos
+- [x] Twilio call/SMS alerts
+- [x] Emergency signal prioritization (simulated)
+- [ ] Train and add the emergency-vehicle model weights
+- [ ] Performance testing on real footage
 - [ ] Accuracy evaluation
 - [ ] Final project report
 - [ ] Project presentation
 - [ ] Demo video
-```
 
 ---
 
 ## 📅 Development Timeline
 
-| Week    | Development Stage               | Status     |
-| ------- | ------------------------------- | ---------- |
-| Week 1  | Project setup and environment   | ✅ Complete |
-| Week 2  | YOLOv8 + ByteTrack integration  | ✅ Complete |
-| Week 3  | Emergency vehicle detection     | ⏳ Next     |
-| Week 4  | Detection/tracking improvements | ⏳ Planned  |
-| Week 5  | Red-light violation detection   | ⏳ Planned  |
-| Week 6  | Speed violation + fine records  | ⏳ Planned  |
-| Week 7  | Emergency signal prioritization | ⏳ Planned  |
-| Week 8  | Collision detection + Twilio    | ⏳ Planned  |
-| Week 9  | Streamlit dashboard             | ⏳ Planned  |
-| Week 10 | End-to-end integration          | ⏳ Planned  |
-| Week 11 | Testing and evaluation          | ⏳ Planned  |
-| Week 12 | Report, PPT, demo and viva      | ⏳ Planned  |
+| Week    | Development Stage               | Status                          |
+| ------- | ------------------------------- | ------------------------------- |
+| Week 1  | Project setup and environment   | ✅ Complete                      |
+| Week 2  | YOLOv8 + ByteTrack integration  | ✅ Complete                      |
+| Week 3  | Emergency vehicle detection     | 🟡 Code ready, model to train    |
+| Week 4  | Detection/tracking improvements | ✅ Complete                      |
+| Week 5  | Red-light violation detection   | ✅ Complete                      |
+| Week 6  | Speed violation + fine records  | ✅ Complete                      |
+| Week 7  | Emergency signal prioritization | ✅ Complete (simulated)          |
+| Week 8  | Collision detection + Twilio    | ✅ Complete                      |
+| Week 9  | Streamlit dashboard             | ✅ Complete                      |
+| Week 10 | End-to-end integration          | ✅ Complete (uploads, unified pipeline) |
+| Week 11 | Testing and evaluation          | ⏳ Next: real-footage tuning, metrics |
+| Week 12 | Report, PPT, demo and viva      | ⏳ Planned                       |
 
 ---
 
@@ -286,28 +309,51 @@ cp .env.example .env     # then fill in the Twilio values
 
 Without these, collision alerts are still logged; only the SMS is skipped.
 
-### 5. Run the modules
+### 5. Start the dashboard
 
 Run everything from the project root so relative paths resolve.
 
 ```bash
-python init_database.py                       # create tables (optional; created on demand)
-python run_video.py --no-display              # detection + tracking + red-light check
-python -m app.violation.speed                 # speed estimation
-python -m app.violation.collision             # possible-collision monitoring
-python -m app.emergency.signal_priority       # needs models/emergency_vehicle.pt
-streamlit run app/main.py                     # dashboard
+streamlit run app/main.py
 ```
 
-Stop-line position (`--stop-line-y`), the speed-measurement lines/distance and
-the emergency ROI are hard-coded for the sample video — recalibrate them for
-your own footage.
+Pages (sidebar):
 
-### 6. Run the tests
+* **Analyze footage** — upload photos or a video, place the lines, run the
+  checks. Use **Try the sample video** to see it work with the bundled clip.
+* **Dashboard** — KPIs, violations per hour, traffic density, filterable records.
+* **Evidence** — annotated frames and vehicle crops for each event.
+* **Alerts** — collision alerts, Twilio status and a test-message button.
+
+For in-browser playback of the annotated video the app converts it to H.264
+with **ffmpeg** (installed with `pip install -r requirements.txt` through
+`imageio-ffmpeg`, or use a system ffmpeg). Without it you can still download
+the result. Uploads are limited to 200 MB (`.streamlit/config.toml`).
+
+### 6. Or run the pipeline from the command line
 
 ```bash
+python run_video.py --no-display                        # red-light check only
+python run_video.py --no-display --speed --distance-m 12 --speed-limit 50 \
+                    --wrong-way --collisions --signal cycle
+python run_video.py --input my_clip.mp4 --no-save       # try it without saving
+python run_video.py --help                              # every option
+```
+
+Positions are percentages of the frame, so they work at any resolution. Tune
+them with the **Analyze footage** page first, which draws them on your video.
+The standalone `python -m app.violation.speed`, `app.violation.collision` and
+`app.emergency.signal_priority` scripts still exist; their lines and zones are
+hard-coded for the sample video.
+
+### 7. Run the tests
+
+```bash
+pip install -r requirements-dev.txt
 pytest
 ```
+
+The tests use stand-in detectors, so they do not need model weights or a GPU.
 
 ### Training the emergency-vehicle model
 
@@ -366,6 +412,4 @@ The project will evaluate:
 
 ## ⭐ Project Status
 
-**Current Stage: Week 2 Completed — YOLOv8 + ByteTrack Detection and Tracking Pipeline**
-
-Development continues toward the complete intelligent traffic-agent system.
+**Current Stage: all plan modules implemented and tested with stand-in detectors. Next: train the emergency-vehicle model, tune on real footage, run the accuracy evaluation, and write the report.**
