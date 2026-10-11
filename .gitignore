@@ -3,6 +3,10 @@ __pycache__/
 *.pyc
 .env
 *.db
+*.db-journal
 runs/
 outputs/
 *.pt
+# Ultralytics label caches embed absolute paths and are rebuilt automatically.
+*.cache
+.pytest_cache/

@@ -1,134 +1,615 @@
+import time
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 import cv2
 
-from app.detection.detector import VehicleDetector
-from app.tracking.tracker import VehicleTracker
-from app.violation.database import save_violation
+from app.alerts import twilio_alert
+from app.annotate import (
+    EMERGENCY,
+    VEHICLE,
+    VIOLATION,
+    crop_with_margin,
+    draw_banner,
+    draw_box,
+)
+from app.violation.collision_logic import CollisionHeuristic
 from app.violation.red_light import RedLightDetector
+from app.violation.signal import SignalSimulator
+from app.violation.speed_estimator import SpeedEstimator
+from app.violation.violation_logger import (
+    log_collision_event,
+    log_density_samples,
+    log_priority_event,
+    log_violation,
+)
+from app.violation.wrong_way import WrongWayDetector
+
+ROOT = Path(__file__).resolve().parents[1]
+
+VEHICLE_NAMES = {
+    2: "car",
+    3: "motorcycle",
+    5: "bus",
+    7: "truck"
+}
+
+GREEN = (80, 200, 60)
+RED = (60, 60, 240)
+AMBER = (0, 170, 255)
+
+ALERTS_OFF = "skipped (alerts off for this run)"
+
+
+@dataclass
+class SpeedConfig:
+    """Two measurement lines (pixel rows) and the real distance between them."""
+
+    line_a_y: int
+    line_b_y: int
+    distance_m: float
+    limit_kmh: float
+    x_min: int = None
+    x_max: int = None
+
+
+@dataclass
+class WrongWayConfig:
+    expected: str = "down"          # direction of normal traffic: down | up
+    min_travel_px: int = 40
+    x_min: int = None               # restrict to one carriageway (pixels)
+    x_max: int = None
+
+
+@dataclass
+class VideoSummary:
+    output_path: Path
+    frames: int = 0
+    total_frames: int = 0
+    video_fps: float = 0.0
+    processing_fps: float = 0.0
+    duration_seconds: float = 0.0
+    peak_vehicles: int = 0
+    violations: list = field(default_factory=list)
+    collisions: list = field(default_factory=list)
+    density: list = field(default_factory=list)      # (second, avg vehicles)
+    emergency_events: list = field(default_factory=list)
+    signal_description: str = ""
+
+    def violations_of(self, kind):
+        return [v for v in self.violations if v["type"] == kind]
+
+
+def _open_writer(path, fps, size):
+    # H.264 ("avc1") plays in browsers but is missing from many OpenCV
+    # builds, so fall back to mp4v (the UI re-encodes it with ffmpeg).
+    for code in ("avc1", "mp4v"):
+        writer = cv2.VideoWriter(
+            str(path), cv2.VideoWriter_fourcc(*code), fps, size
+        )
+
+        if writer.isOpened():
+            return writer
+
+        writer.release()
+
+    return None
+
+
+def _union_box(box_a, box_b):
+    return (
+        min(box_a[0], box_b[0]), min(box_a[1], box_b[1]),
+        max(box_a[2], box_b[2]), max(box_a[3], box_b[3]),
+    )
 
 
 class TrafficVideoProcessor:
 
-    def __init__(self):
-        self.detector = VehicleDetector()
-        self.tracker = VehicleTracker()
+    def __init__(
+        self,
+        detector=None,
+        tracker=None,
+        stop_line_y=300,
+        signal_state="RED",  # Simulated signal for testing
+        signal=None,         # optional SignalSimulator (overrides signal_state)
+        evidence_dir=None,
+        emergency_detector=None,
+        emergency_roi=None,  # (x1, y1, x2, y2); None = whole frame
+        emergency_confirm_frames=3,
+        priority_hold_seconds=10.0,
+        speed=None,          # SpeedConfig, or None to skip speed checks
+        wrong_way=None,      # WrongWayConfig, or None to skip
+        detect_collisions=False,
+        send_collision_alerts=False,
+        camera_id="CAM-01",
+        alert_sender=None,   # test hook: callable(message) -> status string
+    ):
+        # Imported lazily so the heavy YOLO / supervision stack is only
+        # loaded when real components are needed (tests inject fakes).
+        if detector is None:
+            from app.detection.detector import VehicleDetector
+            detector = VehicleDetector()
 
-    def process(self, input_path, output_path):
+        if tracker is None:
+            from app.tracking.tracker import VehicleTracker
+            tracker = VehicleTracker()
 
-        cap = cv2.VideoCapture(input_path)
+        self.detector = detector
+        self.tracker = tracker
+        self.stop_line_y = stop_line_y
+        self.signal = signal or SignalSimulator.fixed(signal_state)
+        self.signal_state = signal_state
+        self.emergency_detector = emergency_detector
+        self.emergency_roi = emergency_roi
+        self.emergency_confirm_frames = emergency_confirm_frames
+        self.priority_hold_seconds = priority_hold_seconds
+        self.speed = speed
+        self.wrong_way = wrong_way
+        self.detect_collisions = detect_collisions
+        self.send_collision_alerts = send_collision_alerts
+        self.camera_id = camera_id
+        self.alert_sender = alert_sender
+        self.evidence_dir = (
+            Path(evidence_dir)
+            if evidence_dir
+            else ROOT / "outputs" / "violations"
+        )
+
+    def _in_roi(self, bbox):
+        if self.emergency_roi is None:
+            return True
+
+        x1, y1, x2, y2 = bbox
+        cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+        rx1, ry1, rx2, ry2 = self.emergency_roi
+
+        return rx1 <= cx <= rx2 and ry1 <= cy <= ry2
+
+    def process(
+        self,
+        input_path,
+        output_path,
+        show=True,
+        progress=None,
+        source=None,
+        save_to_db=True,
+        max_frames=None,
+        run_id=None,
+        frame_callback=None,
+        preview_every=4,
+    ):
+        """Run the pipeline over a video and return a ``VideoSummary``.
+
+        progress:       optional ``callback(frame_number, total_frames)``.
+        frame_callback: optional ``callback(annotated_frame, frame_number)``
+                        called every ``preview_every`` frames (live preview).
+                        The frame must be treated as read-only.
+        source:         label stored with database records (e.g. file name).
+        save_to_db:     log events / density to SQLite.
+        max_frames:     stop early after this many frames (long uploads).
+        run_id:         makes event keys and evidence names unique per run.
+        """
+
+        cap = cv2.VideoCapture(str(input_path))
 
         if not cap.isOpened():
-            raise ValueError("Could not open video")
+            raise ValueError(f"Could not open video: {input_path}")
 
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
 
-        if fps <= 0:
+        if not fps or fps <= 0:
             fps = 30
 
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        # VideoWriter fails silently when the folder is missing.
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        self.evidence_dir.mkdir(parents=True, exist_ok=True)
 
-        out = cv2.VideoWriter(
-            output_path,
-            fourcc,
-            fps,
-            (width, height)
+        out = _open_writer(output_path, fps, (width, height))
+
+        if out is None:
+            cap.release()
+            raise ValueError(f"Could not open output video: {output_path}")
+
+        # Fresh detector state for every run.
+        red_light = RedLightDetector(self.stop_line_y)
+        speed_estimator = (
+            SpeedEstimator(
+                self.speed.line_a_y, self.speed.line_b_y,
+                self.speed.distance_m, self.speed.x_min, self.speed.x_max,
+            ) if self.speed else None
+        )
+        wrong_way_detector = (
+            WrongWayDetector(
+                self.wrong_way.expected, self.wrong_way.min_travel_px,
+                x_min=self.wrong_way.x_min, x_max=self.wrong_way.x_max,
+            ) if self.wrong_way else None
+        )
+        collision_heuristic = (
+            CollisionHeuristic() if self.detect_collisions else None
         )
 
-        stop_line_y = 300
-        signal_state = "RED"  # Simulated signal for initial testing
-        violation_detector = RedLightDetector(stop_line_y)
-        evidence_dir = Path("outputs/violations")
-        evidence_dir.mkdir(parents=True, exist_ok=True)
+        name_part = run_id or "run"
+        key_part = f"{run_id}:" if run_id else ""
+        hold_frames = int(self.priority_hold_seconds * fps)
 
-        while True:
+        summary = VideoSummary(
+            output_path=output_path,
+            total_frames=total_frames,
+            video_fps=fps,
+            signal_description=self.signal.describe(),
+        )
 
-            ret, frame = cap.read()
+        density = {}            # video second -> list of vehicle counts
+        emergency_streak = 0
+        emergency_logged = False
+        override_until = 0      # last frame the emergency override covers
+        alert_threads = []
+        frame_number = 0
+        started = time.perf_counter()
 
-            if not ret:
-                break
+        try:
+            while True:
 
-            detections = self.detector.detect(frame)
+                if max_frames and frame_number >= max_frames:
+                    break
 
-            tracked = self.tracker.update(detections)
+                ret, frame = cap.read()
 
-            for i in range(len(tracked.xyxy)):
+                if not ret:
+                    break
 
-                x1, y1, x2, y2 = map(
-                    int,
-                    tracked.xyxy[i]
+                frame_number += 1
+                seconds = round((frame_number - 1) / fps, 2)
+
+                detections = self.detector.detect(frame)
+                tracked = self.tracker.update(detections)
+
+                # -- emergency vehicles and the simulated signal override ----
+                emergencies = []
+
+                if self.emergency_detector is not None:
+                    emergencies = [
+                        e for e in self.emergency_detector.detect(frame)
+                        if self._in_roi(e["bbox"])
+                    ]
+
+                # Confirm over several frames so one noisy detection does
+                # not flip the signal.
+                emergency_streak = emergency_streak + 1 if emergencies else 0
+                priority_active = (
+                    emergency_streak >= self.emergency_confirm_frames
                 )
 
-                track_id = (
-                    int(tracked.tracker_id[i])
-                    if tracked.tracker_id is not None
-                    else -1
+                if priority_active:
+                    override_until = frame_number + hold_frames
+
+                    if not emergency_logged:
+                        emergency_logged = True
+                        best = max(emergencies, key=lambda e: e["confidence"])
+                        summary.emergency_events.append({
+                            "frame": frame_number,
+                            "time_seconds": seconds,
+                            "class_name": best["class_name"],
+                            "confidence": round(best["confidence"], 3),
+                            "signal_override": True,
+                        })
+
+                        if save_to_db:
+                            log_priority_event(
+                                best["class_name"], best["confidence"],
+                                camera_id=self.camera_id, source=source,
+                            )
+
+                elif not emergencies:
+                    emergency_logged = False
+
+                override = frame_number <= override_until
+                signal_state = (
+                    "GREEN" if override
+                    else self.signal.state_at(frame_number, fps)
                 )
 
-                class_id = int(tracked.class_id[i])
+                # -- per-vehicle checks --------------------------------------
+                vehicles = []
+                events = []     # (type, track_id, bbox, class_name, extra)
 
-                if track_id != -1 and violation_detector.check(
-                    track_id,
-                    y2,
-                    signal_state
-                ):
-                    evidence_path = evidence_dir / (
-                        f"red_light_id_{track_id}.jpg"
+                for i in range(len(tracked.xyxy)):
+                    bbox = tuple(map(int, tracked.xyxy[i]))
+                    center_x = (bbox[0] + bbox[2]) / 2
+
+                    track_id = (
+                        int(tracked.tracker_id[i])
+                        if tracked.tracker_id is not None
+                        else -1
                     )
+
+                    class_name = VEHICLE_NAMES.get(
+                        int(tracked.class_id[i]), "vehicle"
+                    )
+
+                    flagged = False
+
+                    if track_id != -1:
+                        if red_light.check(track_id, bbox[3], signal_state):
+                            events.append(
+                                ("red_light", track_id, bbox, class_name, {})
+                            )
+                            flagged = True
+
+                        if speed_estimator is not None:
+                            kmh = speed_estimator.update(
+                                track_id, center_x, bbox[3], frame_number, fps
+                            )
+
+                            if kmh is not None and kmh > self.speed.limit_kmh:
+                                events.append((
+                                    "speeding", track_id, bbox, class_name,
+                                    {"speed_kmh": round(kmh, 1)},
+                                ))
+                                flagged = True
+
+                        if wrong_way_detector is not None and (
+                            wrong_way_detector.update(
+                                track_id, center_x, bbox[3]
+                            )
+                        ):
+                            events.append(
+                                ("wrong_way", track_id, bbox, class_name, {})
+                            )
+                            flagged = True
+
+                    measured = (
+                        speed_estimator.speeds.get(track_id)
+                        if speed_estimator is not None else None
+                    )
+                    vehicles.append(
+                        (track_id, bbox, class_name, flagged, measured)
+                    )
+
+                collisions = []
+
+                if collision_heuristic is not None:
+                    collisions = collision_heuristic.update(
+                        [(v[0], v[1]) for v in vehicles if v[0] != -1]
+                    )
+
+                # A clean copy for the evidence crops, taken before drawing.
+                clean = frame.copy() if (events or collisions) else None
+
+                # -- drawing -------------------------------------------------
+                collided = {t for pair, _, _ in collisions for t in pair}
+
+                for track_id, bbox, class_name, flagged, measured in vehicles:
+                    label = f"{class_name} ID:{track_id}"
+
+                    if measured is not None:
+                        label += f" {measured:.0f} km/h"
+
+                    draw_box(
+                        frame, bbox, label,
+                        VIOLATION if (flagged or track_id in collided)
+                        else VEHICLE,
+                    )
+
+                for emergency in emergencies:
+                    draw_box(
+                        frame,
+                        emergency["bbox"],
+                        f"{emergency['class_name']} "
+                        f"{emergency['confidence']:.2f}",
+                        EMERGENCY,
+                        thickness=3,
+                    )
+
+                width_now = frame.shape[1]
+                line_colour = RED if signal_state == "RED" else GREEN
+
+                cv2.line(frame, (0, self.stop_line_y),
+                         (width_now, self.stop_line_y), line_colour, 2)
+
+                if self.speed is not None:
+                    for line_y in (self.speed.line_a_y, self.speed.line_b_y):
+                        cv2.line(frame, (0, line_y), (width_now, line_y),
+                                 AMBER, 1)
+
+                banner = f"Signal: {signal_state} (simulated)"
+
+                if override:
+                    banner = "Signal: GREEN (emergency override, simulated)"
+
+                next_y = draw_banner(frame, banner, line_colour)
+
+                if priority_active:
+                    next_y = draw_banner(
+                        frame, "PRIORITY REQUEST (SIMULATED)", EMERGENCY,
+                        origin=(15, next_y),
+                    )
+
+                for pair, box_a, box_b in collisions:
+                    draw_banner(
+                        frame, "POSSIBLE COLLISION - VERIFY", VIOLATION,
+                        origin=(15, next_y),
+                    )
+                    next_y += 40
+
+                # -- save evidence AFTER drawing, then log once --------------
+                for kind, track_id, bbox, class_name, extra in events:
+                    stem = (
+                        f"{name_part}_{kind}_id_{track_id}"
+                        f"_frame_{frame_number}"
+                    )
+                    evidence_path = self.evidence_dir / f"{stem}.jpg"
+                    crop_path = self.evidence_dir / f"{stem}_crop.jpg"
+
                     cv2.imwrite(str(evidence_path), frame)
-                    save_violation(track_id, signal_state, evidence_path)
-                    print(f"Red-light crossing detected: ID {track_id}")
+                    cv2.imwrite(str(crop_path), crop_with_margin(clean, bbox))
 
-                names = {
-                    2: "car",
-                    3: "motorcycle",
-                    5: "bus",
-                    7: "truck"
-                }
+                    inserted = None
 
-                label = names.get(
-                    class_id,
-                    "vehicle"
+                    if save_to_db:
+                        inserted = log_violation(
+                            event_key=(
+                                f"{kind}:{key_part}{track_id}:{frame_number}"
+                            ),
+                            track_id=track_id,
+                            violation_type=kind,
+                            evidence_path=evidence_path,
+                            speed=extra.get("speed_kmh"),
+                            speed_limit=(
+                                self.speed.limit_kmh
+                                if kind == "speeding" else None
+                            ),
+                            signal_state=(
+                                signal_state if kind == "red_light" else None
+                            ),
+                            source=source,
+                            crop_path=crop_path,
+                            camera_id=self.camera_id,
+                        )
+
+                    summary.violations.append({
+                        "type": kind,
+                        "track_id": track_id,
+                        "vehicle": class_name,
+                        "frame": frame_number,
+                        "time_seconds": seconds,
+                        "signal_state": (
+                            signal_state if kind == "red_light" else None
+                        ),
+                        "speed_kmh": extra.get("speed_kmh"),
+                        "evidence_path": str(evidence_path),
+                        "crop_path": str(crop_path),
+                    })
+
+                    print(
+                        f"{kind} detected: ID {track_id} "
+                        f"(record inserted: {inserted})"
+                    )
+
+                for pair, box_a, box_b in collisions:
+                    id_a, id_b = pair
+                    stem = (
+                        f"{name_part}_collision_{id_a}_{id_b}"
+                        f"_frame_{frame_number}"
+                    )
+                    evidence_path = self.evidence_dir / f"{stem}.jpg"
+                    crop_path = self.evidence_dir / f"{stem}_crop.jpg"
+
+                    cv2.imwrite(str(evidence_path), frame)
+                    cv2.imwrite(
+                        str(crop_path),
+                        crop_with_margin(clean, _union_box(box_a, box_b)),
+                    )
+
+                    stamp = datetime.now(timezone.utc).strftime(
+                        "%Y-%m-%d %H:%M:%S UTC"
+                    )
+                    message = (
+                        f"Traffic Agent [{self.camera_id}] {stamp}: possible "
+                        f"collision between vehicle tracks {id_a} and {id_b} "
+                        f"at {seconds}s of {source or 'the video'}. "
+                        f"Please verify the incident."
+                    )
+
+                    status = (
+                        "pending" if self.send_collision_alerts
+                        else ALERTS_OFF
+                    )
+
+                    entry = {
+                        "track_ids": (id_a, id_b),
+                        "frame": frame_number,
+                        "time_seconds": seconds,
+                        "evidence_path": str(evidence_path),
+                        "crop_path": str(crop_path),
+                        "alert_status": status,
+                    }
+
+                    if save_to_db:
+                        event_id = log_collision_event(
+                            id_a, id_b, evidence_path,
+                            camera_id=self.camera_id, source=source,
+                            crop_path=crop_path, alert_status=status,
+                        )
+
+                        if self.send_collision_alerts:
+                            # Runs off this thread; the outcome is written
+                            # back to the collision record and this entry.
+                            options = {
+                                "on_done": (
+                                    lambda result, e=entry:
+                                    e.update(alert_status=result)
+                                ),
+                            }
+
+                            if self.alert_sender:
+                                options["sender"] = self.alert_sender
+
+                            alert_threads.append(
+                                twilio_alert.dispatch(
+                                    event_id, message, **options
+                                )
+                            )
+                    elif self.send_collision_alerts:
+                        entry["alert_status"] = "skipped (results not saved)"
+
+                    summary.collisions.append(entry)
+
+                    print(message)
+
+                count = len(vehicles)
+                summary.peak_vehicles = max(summary.peak_vehicles, count)
+                density.setdefault(int((frame_number - 1) / fps), []).append(
+                    count
                 )
 
-                cv2.rectangle(
-                    frame,
-                    (x1, y1),
-                    (x2, y2),
-                    (0, 255, 0),
-                    2
-                )
+                out.write(frame)
 
-                cv2.putText(
-                    frame,
-                    f"{label} ID:{track_id}",
-                    (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (0, 255, 0),
-                    2
-                )
+                if frame_callback and (frame_number % preview_every == 0):
+                    frame_callback(frame, frame_number)
 
-            cv2.line(
-                frame,
-                (0, stop_line_y),
-                (frame.shape[1], stop_line_y),
-                (0, 0, 255),
-                2
+                if progress and (frame_number % 5 == 0):
+                    progress(frame_number, total_frames)
+
+                if show:
+                    cv2.imshow("Traffic Agent", frame)
+
+                    if cv2.waitKey(1) & 0xFF == ord("q"):
+                        break
+
+        finally:
+            cap.release()
+            out.release()
+
+            if show:
+                cv2.destroyAllWindows()
+
+        # Let alerts already in flight finish (bounded, in case Twilio hangs).
+        for thread in alert_threads:
+            if thread is not None:
+                thread.join(timeout=30)
+
+        elapsed = max(time.perf_counter() - started, 1e-9)
+
+        summary.frames = frame_number
+        summary.processing_fps = frame_number / elapsed
+        summary.duration_seconds = frame_number / fps
+        summary.density = [
+            (second, sum(counts) / len(counts))
+            for second, counts in sorted(density.items())
+        ]
+
+        if save_to_db:
+            log_density_samples(
+                source or "video", summary.density, camera_id=self.camera_id
             )
 
-            out.write(frame)
+        if progress:
+            progress(frame_number, total_frames)
 
-            cv2.imshow(
-                "Traffic Agent",
-                frame
-            )
-
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
-
-        cap.release()
-        out.release()
-        cv2.destroyAllWindows()
+        return summary

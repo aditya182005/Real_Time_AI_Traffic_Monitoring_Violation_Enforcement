@@ -1,17 +1,19 @@
-from app.violation.violation_logger import log_violation
-import sqlite3
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime
 from pathlib import Path
 
 import cv2
 import supervision as sv
 from ultralytics import YOLO
 
+from app.violation.violation_logger import log_violation
+
 ROOT = Path(__file__).resolve().parents[2]
 
 VIDEO_PATH = ROOT / "data" / "videos" / "traffic.mp4"
-MODEL_PATH = ROOT / "yolov8n.pt"
-DB_PATH = ROOT / "traffic_agent.db"
+# Bare model name: Ultralytics downloads it on first use. The *.pt files are
+# git-ignored, so a fresh clone does not contain the weights.
+MODEL_PATH = "yolov8n.pt"
 EVIDENCE_DIR = ROOT / "outputs" / "evidence"
 
 # Adjust these to fit your video.
@@ -27,44 +29,13 @@ CONFIDENCE = 0.35
 VEHICLE_CLASSES = [2, 3, 5, 7]  # car, motorcycle, bus, truck
 
 
-def setup_database():
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS speed_violations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                track_id INTEGER NOT NULL,
-                speed_kmh REAL NOT NULL,
-                speed_limit_kmh REAL NOT NULL,
-                timestamp TEXT NOT NULL,
-                evidence_path TEXT NOT NULL
-            )
-        """)
-
-
-def save_violation(track_id, speed, evidence_path):
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-            INSERT INTO speed_violations
-            (track_id, speed_kmh, speed_limit_kmh,
-             timestamp, evidence_path)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            track_id,
-            round(speed, 2),
-            SPEED_LIMIT_KMH,
-            datetime.now(timezone.utc).isoformat(),
-            str(evidence_path)
-        ))
-
-
 def main():
     if not VIDEO_PATH.exists():
         raise FileNotFoundError(f"Video not found: {VIDEO_PATH}")
 
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
-    setup_database()
 
-    model = YOLO(str(MODEL_PATH))
+    model = YOLO(MODEL_PATH)
     tracker = sv.ByteTrack()
 
     cap = cv2.VideoCapture(str(VIDEO_PATH))
@@ -75,6 +46,10 @@ def main():
         raise ValueError("Could not read video FPS.")
 
     frame_number = 0
+
+    # Event keys must be unique per run: track IDs and frame numbers repeat
+    # between runs, and a repeated key is silently ignored by the database.
+    run_id = uuid.uuid4().hex[:8]
 
     # Track ID -> first line crossing frame.
     line_a_frames = {}
@@ -186,11 +161,8 @@ def main():
                                 cv2.imwrite(
                                     str(evidence_path), frame
                                 )
-                                save_violation(
-                                    track_id, speed_kmh, evidence_path
-                                )
                                 inserted = log_violation(
-                                    event_key=f"speeding:{track_id}:{frame_number}",
+                                    event_key=f"speeding:{run_id}:{track_id}:{frame_number}",
                                     track_id=track_id,
                                     violation_type="speeding",
                                     evidence_path=str(evidence_path),

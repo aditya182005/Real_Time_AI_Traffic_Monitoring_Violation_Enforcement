@@ -1,13 +1,19 @@
-from app.violation.violation_logger import log_violation
-
-
 class RedLightDetector:
+    """Detects a vehicle crossing the stop line while the signal is red.
+
+    This class only decides *whether* a crossing happened. Saving evidence
+    and writing the database record is the caller's job, so the evidence
+    image can be saved with the final annotated frame and the record can
+    carry its path (previously the record was written first with an empty
+    evidence path, and a second legacy table was written as well).
+    """
+
     def __init__(self, stop_line_y):
         self.stop_line_y = stop_line_y
         self.previous_y = {}
         self.reported_ids = set()
 
-    def check(self, track_id, vehicle_y, signal_state, frame_number=None, evidence_path=None):
+    def check(self, track_id, vehicle_y, signal_state):
         if track_id is None:
             return False
 
@@ -25,14 +31,6 @@ class RedLightDetector:
 
         if crossed_line and signal_state == "RED":
             self.reported_ids.add(track_id)
-            inserted = log_violation(
-                event_key=f"red_light:{track_id}:{frame_number if frame_number is not None else 'unknown'}",
-                track_id=track_id,
-                violation_type="red_light",
-                evidence_path=evidence_path or "",
-                signal_state="RED",
-            )
-            print("Red-light record inserted:", inserted)
             return True
 
         return False

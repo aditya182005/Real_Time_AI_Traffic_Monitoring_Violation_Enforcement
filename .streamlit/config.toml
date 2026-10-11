@@ -1,0 +1,15 @@
+[theme]
+# Light "concrete and road sign" palette; custom pieces are in app/ui/theme.py.
+base = "light"
+primaryColor = "#0F4C9A"
+backgroundColor = "#E8EAEC"
+secondaryBackgroundColor = "#DCE0E4"
+textColor = "#14202B"
+font = "sans serif"
+
+[server]
+# Largest file a user may upload, in MB.
+maxUploadSize = 200
+
+[browser]
+gatherUsageStats = false

@@ -8,3 +8,4 @@ pandas
 pillow
 python-dotenv
 twilio
+imageio-ffmpeg
