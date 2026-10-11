@@ -132,8 +132,9 @@ class StaticPageTests(PageTestCase):
     def test_test_message_button_sends_once_and_reports_the_result(self):
         self.start(clicks={"twilio_test"})
         alerts = self.ui("alerts")
-        env = {"TWILIO_ACCOUNT_SID": "a", "TWILIO_AUTH_TOKEN": "b",
-               "TWILIO_PHONE_NUMBER": "c", "ALERT_TO_PHONE": "d"}
+        env = {"TWILIO_ACCOUNT_SID": "AC1", "TWILIO_AUTH_TOKEN": "b",
+               "TWILIO_PHONE_NUMBER": "+15550001",
+               "ALERT_TO_PHONE": "+15550002"}
 
         with mock.patch.dict("os.environ", env, clear=True), \
                 mock.patch.object(alerts.twilio_alert, "send_alert",
@@ -383,8 +384,9 @@ class UploadFlowTests(PageTestCase):
             "c.mp4", self.video().read_bytes())},
             values={"check_collisions": True, "send_alerts": True})
         upload = self.upload_module()
-        env = {"TWILIO_ACCOUNT_SID": "a", "TWILIO_AUTH_TOKEN": "b",
-               "TWILIO_PHONE_NUMBER": "c", "ALERT_TO_PHONE": "d"}
+        env = {"TWILIO_ACCOUNT_SID": "AC1", "TWILIO_AUTH_TOKEN": "b",
+               "TWILIO_PHONE_NUMBER": "+15550001",
+               "ALERT_TO_PHONE": "+15550002"}
 
         with mock.patch.dict("os.environ", env, clear=True):
             upload.render()

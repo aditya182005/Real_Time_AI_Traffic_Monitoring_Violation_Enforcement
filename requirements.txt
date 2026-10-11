@@ -1,11 +1,11 @@
-ultralytics
-supervision
-opencv-python
-streamlit
+ultralytics>=8.1
+supervision>=0.20
+opencv-python>=4.8
+streamlit>=1.35
 streamlit-webrtc
 numpy
 pandas
 pillow
 python-dotenv
-twilio
+twilio>=8.0
 imageio-ffmpeg

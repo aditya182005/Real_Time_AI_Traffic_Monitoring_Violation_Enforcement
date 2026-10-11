@@ -11,10 +11,7 @@ SETTING_LABELS = {
     "ALERT_TO_PHONE": "Phone to alert",
 }
 
-TEST_MESSAGE = (
-    "Traffic Agent test message. No incident has happened; "
-    "you can ignore this."
-)
+TEST_MESSAGE = twilio_alert.TEST_MESSAGE
 
 
 def _twilio_panel():
@@ -42,7 +39,12 @@ def _twilio_panel():
 
     configured = twilio_alert.is_configured()
 
-    if st.button("Send a test message", disabled=not configured,
+    for problem in twilio_alert.config_problems():
+        st.warning(problem)
+
+    ready = twilio_alert.is_ready()
+
+    if st.button("Send a test message", disabled=not ready,
                  key="twilio_test",
                  help="Sends one SMS to the number in ALERT_TO_PHONE."):
         with st.spinner("Sending…"):
@@ -55,6 +57,11 @@ def _twilio_panel():
 
     if not configured:
         st.caption("Fill in the four settings above to turn this on.")
+    else:
+        st.caption(
+            "To check your setup from a terminal: "
+            "`python -m app.alerts.twilio_alert --send`"
+        )
 
 
 def render(data):

@@ -395,9 +395,10 @@ def _settings_panel():
             help="Needs overlapping vehicles that also slow down sharply.")
 
         configured = twilio_alert.is_configured()
+        ready = twilio_alert.is_ready()
         settings.send_alerts = st.checkbox(
             "Send an SMS for each collision found", value=False,
-            disabled=not (settings.check_collisions and configured),
+            disabled=not (settings.check_collisions and ready),
             key="send_alerts",
         )
 
@@ -405,6 +406,11 @@ def _settings_panel():
             st.caption(
                 "Twilio is not set up, so nothing will be sent. "
                 "See the Alerts page."
+            )
+        elif not ready:
+            st.caption(
+                "Twilio settings need fixing before alerts can be sent: "
+                + " ".join(twilio_alert.config_problems())
             )
         elif settings.send_alerts:
             st.warning(

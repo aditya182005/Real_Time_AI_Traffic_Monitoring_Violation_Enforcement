@@ -301,13 +301,53 @@ pip install -r requirements.txt        # add -r requirements-dev.txt for tests
 
 `yolov8n.pt` is downloaded automatically by Ultralytics on first run.
 
-### 4. (Optional) Twilio alerts
+### 4. (Optional) Twilio collision alerts
 
-```bash
-cp .env.example .env     # then fill in the Twilio values
-```
+Without Twilio, collisions are still detected and logged; only the message is
+skipped. To get a real SMS (and optionally a voice call):
 
-Without these, collision alerts are still logged; only the SMS is skipped.
+1. Create a free account at [twilio.com](https://www.twilio.com) and, in the
+   Console, get a **phone number** that can send SMS.
+2. Copy the **Account SID** (starts with `AC`) and **Auth Token** from the
+   Console home page.
+3. **Trial accounts can only message numbers you have verified.** Add your
+   own phone under *Phone Numbers → Verified Caller IDs* first.
+4. Create your settings file and fill it in:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   | Setting | Value |
+   | ------- | ----- |
+   | `TWILIO_ACCOUNT_SID` | starts with `AC` |
+   | `TWILIO_AUTH_TOKEN` | from the Console (keep it secret) |
+   | `TWILIO_PHONE_NUMBER` | your Twilio number, like `+14155550123` |
+   | `ALERT_TO_PHONE` | the phone to alert (verified, for trial accounts) |
+   | `ALERT_VOICE_CALL` | `true` to also place a call (optional) |
+   | `CAMERA_ID` | name used in alerts, e.g. `NH-4-Junction` (optional) |
+
+   Numbers must be in international format (`+` and the country code). `.env`
+   is git-ignored, so your secrets are not committed.
+5. Check the setup. This never prints your secrets:
+
+   ```bash
+   python -m app.alerts.twilio_alert            # checks the settings
+   python -m app.alerts.twilio_alert --send     # sends one real test SMS
+   python -m app.alerts.twilio_alert --send --call   # SMS and a test call
+   ```
+
+   The **Alerts** page of the dashboard has the same check and a *Send a test
+   message* button.
+
+Alerts are **opt-in for every run**: tick *Send an SMS for each collision
+found* on the Analyze page (or pass `--send-alerts --collisions` to
+`run_video.py`). Each alert names the camera and gives a UTC time, and the
+result (`sent`, `skipped` or `failed: …`) is saved on the collision record and
+shown on the Alerts page. Common failures show a plain hint, for example Twilio
+error 21608 means the number to alert is not verified on a trial account.
+Trial messages carry a "Sent from your Twilio trial account" prefix, and
+Twilio may bill per message once you upgrade.
 
 ### 5. Start the dashboard
 
