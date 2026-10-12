@@ -6,6 +6,8 @@ real (synthetic) video file without needing any model.
 """
 
 import sqlite3
+
+from tests.db_helpers import db_connect
 import tempfile
 import unittest
 from pathlib import Path
@@ -121,7 +123,7 @@ class PipelineTests(unittest.TestCase):
         if not self.db.exists():
             return []
 
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             return conn.execute(sql).fetchall()
 
     # -- speeding ---------------------------------------------------------

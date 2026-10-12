@@ -1,6 +1,8 @@
 import contextlib
 import io
 import sqlite3
+
+from tests.db_helpers import db_connect
 import tempfile
 import unittest
 from pathlib import Path
@@ -114,7 +116,7 @@ class RunTests(unittest.TestCase):
                 argv, detector=FakeDetector(), tracker=CarMovingDown())
 
     def rows(self):
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             return conn.execute(
                 "SELECT event_key, camera_id, source "
                 "FROM violation_records").fetchall()
