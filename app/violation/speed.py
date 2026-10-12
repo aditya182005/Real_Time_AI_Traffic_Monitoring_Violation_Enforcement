@@ -6,6 +6,7 @@ import cv2
 import supervision as sv
 from ultralytics import YOLO
 
+from app import paths
 from app.violation.violation_logger import log_violation
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -14,7 +15,7 @@ VIDEO_PATH = ROOT / "data" / "videos" / "traffic.mp4"
 # Bare model name: Ultralytics downloads it on first use. The *.pt files are
 # git-ignored, so a fresh clone does not contain the weights.
 MODEL_PATH = "yolov8n.pt"
-EVIDENCE_DIR = ROOT / "outputs" / "evidence"
+EVIDENCE_DIR = paths.OUTPUT_DIR / "evidence"
 
 # Adjust these to fit your video.
 LINE_A_Y = 620

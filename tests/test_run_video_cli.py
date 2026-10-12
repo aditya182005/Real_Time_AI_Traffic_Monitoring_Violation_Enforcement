@@ -89,7 +89,7 @@ class RunTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
         # Keep evidence out of the real outputs/ folder.
-        patcher = mock.patch.object(run_video, "ROOT", self.dir)
+        patcher = mock.patch.object(run_video, "OUTPUT_DIR", self.dir / "outputs")
         patcher.start()
         self.addCleanup(patcher.stop)
 

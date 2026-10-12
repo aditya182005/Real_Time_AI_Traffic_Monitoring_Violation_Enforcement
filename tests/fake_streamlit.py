@@ -171,6 +171,9 @@ class FakeStreamlit(types.ModuleType):
 
         return found
 
+    def form_submit_button(self, label="", key=None, **kwargs):
+        return (key or label) in self.clicks
+
     def download_button(self, *args, **kwargs):
         self.calls.append(("download_button", args, kwargs))
         return False

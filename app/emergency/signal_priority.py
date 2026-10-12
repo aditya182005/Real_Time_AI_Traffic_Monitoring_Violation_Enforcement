@@ -7,12 +7,14 @@ from pathlib import Path
 import supervision as sv
 from ultralytics import YOLO
 
+from app import paths
+
 ROOT = Path(__file__).resolve().parents[2]
 
 VIDEO_PATH = ROOT / "data" / "videos" / "traffic.mp4"
 MODEL_PATH = ROOT / "models" / "emergency_vehicle.pt"
-DB_PATH = ROOT / "traffic_agent.db"
-OUTPUT_DIR = ROOT / "outputs" / "priority"
+DB_PATH = paths.DB_PATH
+OUTPUT_DIR = paths.OUTPUT_DIR / "priority"
 
 CONFIDENCE_THRESHOLD = 0.65
 CONFIRM_FRAMES = 3

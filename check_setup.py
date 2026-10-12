@@ -186,12 +186,25 @@ def check_twilio_settings():
     )]
 
 
-def check_writable(root=ROOT):
-    root = Path(root)
+def check_writable(root=None):
+    """The database and outputs folders must be writable.
+
+    By default these follow TRAFFIC_AGENT_DATA_DIR (see app/paths.py).
+    """
+
+    if root is None:
+        from app import paths
+
+        folders = (("Database folder", paths.DATA_DIR),
+                   ("Outputs folder", paths.OUTPUT_DIR))
+    else:
+        root = Path(root)
+        folders = (("Database folder", root),
+                   ("Outputs folder", root / "outputs"))
+
     checks = []
 
-    for label, folder in (("Database folder", root),
-                          ("Outputs folder", root / "outputs")):
+    for label, folder in folders:
         try:
             folder.mkdir(parents=True, exist_ok=True)
 
@@ -215,7 +228,7 @@ def quick_checks(root=ROOT):
         + check_video_playback()
         + check_files(root)
         + check_twilio_settings()
-        + check_writable(root)
+        + check_writable()
     )
 
 

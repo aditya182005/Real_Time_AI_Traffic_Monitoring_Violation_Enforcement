@@ -7,7 +7,7 @@ import cv2
 import pandas as pd
 import streamlit as st
 
-from app import media
+from app import media, paths
 from app.alerts import twilio_alert
 from app.analysis import (
     VideoSettings,
@@ -23,7 +23,7 @@ from app.ui import theme
 from app.ui.data import ROOT
 from app.ui.helpers import csv_bytes, show_df, show_image
 
-UPLOAD_ROOT = ROOT / "outputs" / "uploads"
+UPLOAD_ROOT = paths.OUTPUT_DIR / "uploads"
 STAGING_DIR = UPLOAD_ROOT / "_staging"
 SAMPLE_VIDEO = ROOT / "data" / "videos" / "traffic.mp4"
 MAX_IMAGES = 12

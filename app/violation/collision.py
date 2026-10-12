@@ -6,6 +6,7 @@ import cv2
 import supervision as sv
 from ultralytics import YOLO
 
+from app import paths
 from app.alerts import twilio_alert
 from app.violation.collision_logic import (  # noqa: F401  (calculate_iou re-exported)
     CollisionHeuristic,
@@ -21,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 VIDEO_PATH = ROOT / "data" / "videos" / "traffic.mp4"
 # Bare model name: Ultralytics downloads it on first use (*.pt is git-ignored).
 MODEL_PATH = "yolov8n.pt"
-OUTPUT_DIR = ROOT / "outputs" / "collisions"
+OUTPUT_DIR = paths.OUTPUT_DIR / "collisions"
 
 CAMERA_ID = os.getenv("CAMERA_ID", "CAM-01")
 CONFIDENCE = 0.35
