@@ -31,6 +31,7 @@ EXTRA_COLUMNS = {
         "camera_id": "TEXT",
         "source": "TEXT",
         "crop_path": "TEXT",
+        "alert_latency_ms": "REAL",
     },
     "priority_events": {
         "camera_id": "TEXT",
@@ -110,7 +111,8 @@ def _create_table(conn):
             alert_status TEXT,
             camera_id TEXT,
             source TEXT,
-            crop_path TEXT
+            crop_path TEXT,
+            alert_latency_ms REAL
         )
     """)
 
@@ -317,15 +319,24 @@ def log_collision_event(
         return cursor.lastrowid
 
 
-def set_alert_status(event_id, status):
-    """Store the outcome of the Twilio alert on a collision record."""
+def set_alert_status(event_id, status, latency_ms=None):
+    """Store the outcome of the Twilio alert on a collision record.
+
+    ``latency_ms`` is the time from the collision being detected to Twilio
+    accepting (or rejecting) the request.
+    """
 
     with _connect() as conn:
         _create_table(conn)
 
         conn.execute(
-            "UPDATE collision_events SET alert_status = ? WHERE id = ?",
-            (status, event_id)
+            "UPDATE collision_events "
+            "SET alert_status = ?, alert_latency_ms = ? WHERE id = ?",
+            (
+                status,
+                None if latency_ms is None else round(float(latency_ms), 1),
+                event_id,
+            )
         )
 
         conn.commit()

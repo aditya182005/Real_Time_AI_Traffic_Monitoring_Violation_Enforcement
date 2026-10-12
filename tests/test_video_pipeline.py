@@ -217,6 +217,9 @@ class PipelineTests(unittest.TestCase):
         )
         # The alert names the camera and asks for verification.
         self.assertIn("CAM-3", sent[0])
+        # The plan asks for the camera ID *and a timestamp* in every alert.
+        self.assertRegex(
+            sent[0], r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC")
         self.assertIn("verify", sent[0].lower())
 
     def test_no_collision_check_unless_enabled(self):

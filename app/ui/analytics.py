@@ -113,6 +113,37 @@ def alert_status_counts(df):
     return result
 
 
+def alert_metrics(df):
+    """Twilio success rate and latency (a metric in the project plan).
+
+    Success rate is sent / (sent + failed): skipped and pending alerts were
+    never attempted (or are not finished), so they do not count either way.
+    Latency is from detection to Twilio's answer, for sent alerts only.
+    """
+
+    counts = alert_status_counts(df)
+    attempted = counts["sent"] + counts["failed"]
+
+    result = {
+        "attempted": attempted,
+        "success_rate": counts["sent"] / attempted if attempted else None,
+        "median_ms": None,
+        "slowest_ms": None,
+    }
+
+    if df.empty or not {"alert_status", "alert_latency_ms"} <= set(df.columns):
+        return result
+
+    sent = df[df["alert_status"].fillna("").astype(str).str.startswith("sent")]
+    latency = pd.to_numeric(sent["alert_latency_ms"], errors="coerce").dropna()
+
+    if not latency.empty:
+        result["median_ms"] = float(latency.median())
+        result["slowest_ms"] = float(latency.max())
+
+    return result
+
+
 def latest_row(df):
     """Most recent row by timestamp, or None."""
 

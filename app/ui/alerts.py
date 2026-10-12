@@ -11,10 +11,7 @@ SETTING_LABELS = {
     "ALERT_TO_PHONE": "Phone to alert",
 }
 
-TEST_MESSAGE = (
-    "Traffic Agent test message. No incident has happened; "
-    "you can ignore this."
-)
+TEST_MESSAGE = twilio_alert.TEST_MESSAGE
 
 
 def _twilio_panel():
@@ -42,7 +39,12 @@ def _twilio_panel():
 
     configured = twilio_alert.is_configured()
 
-    if st.button("Send a test message", disabled=not configured,
+    for problem in twilio_alert.config_problems():
+        st.warning(problem)
+
+    ready = twilio_alert.is_ready()
+
+    if st.button("Send a test message", disabled=not ready,
                  key="twilio_test",
                  help="Sends one SMS to the number in ALERT_TO_PHONE."):
         with st.spinner("Sending…"):
@@ -55,6 +57,11 @@ def _twilio_panel():
 
     if not configured:
         st.caption("Fill in the four settings above to turn this on.")
+    else:
+        st.caption(
+            "To check your setup from a terminal: "
+            "`python -m app.alerts.twilio_alert --send`"
+        )
 
 
 def render(data):
@@ -68,6 +75,7 @@ def render(data):
     )
 
     counts = analytics.alert_status_counts(collisions)
+    metrics = analytics.alert_metrics(collisions)
     theme.gantry([
         ("Alerts sent", counts["sent"], "SMS accepted by Twilio",
          "green" if counts["sent"] else "white"),
@@ -75,6 +83,17 @@ def render(data):
         ("Skipped", counts["skipped"], "not set up, or alerts off", "amber"),
         ("Failed", counts["failed"], "Twilio reported an error",
          "red" if counts["failed"] else "white"),
+        ("Success rate",
+         "–" if metrics["success_rate"] is None
+         else f"{metrics['success_rate'] * 100:.0f}%",
+         f"of {metrics['attempted']} attempted" if metrics["attempted"]
+         else "no alerts attempted yet", "white"),
+        ("Typical delay",
+         "–" if metrics["median_ms"] is None
+         else f"{metrics['median_ms'] / 1000:.1f} s",
+         "detection to Twilio's reply (median)"
+         if metrics["median_ms"] is not None
+         else "no sent alerts yet", "white"),
     ])
 
     _twilio_panel()
