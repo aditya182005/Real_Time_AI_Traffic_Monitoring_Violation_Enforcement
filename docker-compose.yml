@@ -1,0 +1,18 @@
+services:
+  traffic-agent:
+    build: .
+    ports:
+      - "8501:8501"
+    env_file: .env          # DASHBOARD_PASSWORD, Twilio settings, CAMERA_ID
+    environment:
+      APP_ENV: production
+      TRAFFIC_AGENT_DATA_DIR: /data
+      UPLOAD_RETENTION_DAYS: "30"
+    volumes:
+      - traffic_data:/data              # database, uploads, evidence
+      - ./models:/app/models:ro         # emergency_vehicle.pt (optional)
+    restart: unless-stopped
+    mem_limit: 4g
+
+volumes:
+  traffic_data:

@@ -17,15 +17,20 @@ from pathlib import Path
 
 import cv2
 
+from app import paths
 from app.analysis import VideoSettings, build_processor, validate_settings
 
 ROOT = Path(__file__).resolve().parent
+OUTPUT_DIR = paths.OUTPUT_DIR
 
 
-def build_parser():
+def build_parser(add_help=True):
+    """``add_help=False`` lets another tool (evaluate.py) reuse the options."""
+
     parser = argparse.ArgumentParser(
         description="Detect, track and check vehicles in a video "
-                    "(red light, speed, wrong way, collisions, emergency)."
+                    "(red light, speed, wrong way, collisions, emergency).",
+        add_help=add_help,
     )
 
     parser.add_argument("--input", default="data/videos/traffic.mp4")
@@ -127,11 +132,19 @@ def video_size(path):
         cap.release()
 
 
-def main(argv=None, detector=None, tracker=None, emergency_detector=None):
-    """``detector``/``tracker``/``emergency_detector`` are for tests."""
-
+def main(argv=None, **components):
     parser = build_parser()
-    args = parser.parse_args(argv)
+
+    return run(parser.parse_args(argv), parser, **components)
+
+
+def run(args, parser, detector=None, tracker=None, emergency_detector=None):
+    """Run the pipeline for parsed arguments and return the summary.
+
+    ``parser`` is only used to report bad options. ``detector``, ``tracker``
+    and ``emergency_detector`` are for tests.
+    """
+
     settings = settings_from_args(args)
 
     problems = validate_settings(settings)
@@ -171,7 +184,7 @@ def main(argv=None, detector=None, tracker=None, emergency_detector=None):
 
     processor = build_processor(
         settings, width, height, detector, tracker, emergency_detector,
-        ROOT / "outputs" / "violations" / run_id,
+        OUTPUT_DIR / "violations" / run_id,
     )
 
     summary = processor.process(

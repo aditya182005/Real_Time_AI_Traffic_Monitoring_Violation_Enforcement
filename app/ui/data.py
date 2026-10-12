@@ -5,8 +5,10 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from app import paths
+
 ROOT = Path(__file__).resolve().parents[2]
-DB_PATH = ROOT / "traffic_agent.db"
+DB_PATH = paths.DB_PATH
 
 # Dashboard section -> SQLite table
 TABLES = {

@@ -10,6 +10,8 @@ font = "sans serif"
 [server]
 # Largest file a user may upload, in MB.
 maxUploadSize = 200
+# Do not try to open a browser (servers, containers).
+headless = true
 
 [browser]
 gatherUsageStats = false

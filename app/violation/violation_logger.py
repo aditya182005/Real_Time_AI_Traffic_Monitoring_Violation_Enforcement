@@ -3,8 +3,10 @@ from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app import paths
+
 ROOT = Path(__file__).resolve().parents[2]
-DB_PATH = ROOT / "traffic_agent.db"
+DB_PATH = paths.DB_PATH
 
 # Demo amounts only. Replace with applicable rules
 # before using this in any real-world setting.

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import cv2
 
+from app import paths
 from app.alerts import twilio_alert
 from app.annotate import (
     EMERGENCY,
@@ -153,7 +154,7 @@ class TrafficVideoProcessor:
         self.evidence_dir = (
             Path(evidence_dir)
             if evidence_dir
-            else ROOT / "outputs" / "violations"
+            else paths.OUTPUT_DIR / "violations"
         )
 
     def _in_roi(self, bbox):

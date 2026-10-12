@@ -122,6 +122,8 @@ Traffic-Agent/
 ├── app/
 │   ├── main.py                    # Streamlit entry point (sidebar pages)
 │   ├── video_processor.py         # unified per-frame pipeline for a video
+│   ├── paths.py                   # where files live (TRAFFIC_AGENT_DATA_DIR)
+│   ├── housekeeping.py            # optional deletion of old upload runs
 │   ├── analysis.py                # image analysis + video settings
 │   ├── media.py                   # upload validation, image decode, H.264 re-encode
 │   ├── annotate.py                # drawing boxes, banners, calibration lines
@@ -131,6 +133,7 @@ Traffic-Agent/
 │   │   ├── dashboard.py           # KPIs and analytics charts
 │   │   ├── evidence.py            # evidence gallery
 │   │   ├── alerts.py              # collision alerts + Twilio status
+│   │   ├── auth.py                # dashboard password (DASHBOARD_PASSWORD)
 │   │   ├── about.py, theme.py, analytics.py, data.py, helpers.py
 │   │
 │   ├── detection/
@@ -161,8 +164,12 @@ Traffic-Agent/
 ├── init_database.py
 ├── train_emergency.py             # trains and installs the emergency model
 ├── check_setup.py                 # is this computer ready? (--full runs the models)
+├── evaluate.py                    # precision / recall against hand-labelled events
 ├── requirements.txt / requirements-dev.txt
-├── .env.example                   # copy to .env for Twilio
+├── Dockerfile, docker-compose.yml # deployment (see DEPLOY.md)
+├── .github/workflows/ci.yml       # tests + Docker build + real-model smoke test
+├── .env.example                   # copy to .env (Twilio, password, data folder)
+├── DEPLOY.md                      # putting it on a server
 └── README.md
 ```
 
@@ -418,6 +425,43 @@ pytest
 ```
 
 The tests use stand-in detectors, so they do not need model weights or a GPU.
+
+### Measuring accuracy
+
+Watch a clip, note when each violation really happens, and write them down:
+
+```text
+type,time_seconds
+red_light,12.4
+speeding,31.0
+collision,48.2
+```
+
+`type` is `red_light`, `speeding`, `wrong_way` or `collision`. Then run the same
+options you would give `run_video.py`:
+
+```bash
+python evaluate.py --video clip.mp4 --truth truth.csv --speed --collisions
+```
+
+It prints correct / false / missed counts, precision, recall and F1 per type,
+plus processing FPS, and `--report results.json` saves them. A detection counts
+as correct when it has the same type and is within `--tolerance` seconds
+(default 1.0) of a labelled event. Labels for checks you did not switch on are
+reported as "not scored", not counted as misses. Nothing is written to the
+database. These numbers are the "Violation detection" and "Real-time
+performance" results the project plan asks for.
+
+### Password, data folder and deployment
+
+* `DASHBOARD_PASSWORD` in `.env` puts a login in front of the dashboard. With
+  `APP_ENV=production` the app refuses to start without one.
+* `TRAFFIC_AGENT_DATA_DIR` moves the database and all generated files out of
+  the project folder (the Docker image uses `/data`).
+* `UPLOAD_RETENTION_DAYS` deletes old upload-run folders (default 0 = keep).
+* `docker compose up -d --build` runs the whole thing; see **DEPLOY.md** for
+  HTTPS, backups and security notes. `streamlit-webrtc` was removed from the
+  requirements because nothing used it.
 
 ### Training the emergency-vehicle model
 

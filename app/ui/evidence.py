@@ -3,16 +3,18 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from app import paths
 from app.ui import theme
 from app.ui.data import ROOT
 from app.ui.helpers import show_image
 
 
 def resolve_evidence_path(value):
-    """Resolve a stored path, but only if it stays inside the project.
+    """Resolve a stored path, but only if it stays inside the project or
+    the configured data folder (see app/paths.py).
 
-    Paths come from the database; refusing anything outside the project
-    folder means a tampered record cannot make the page read other files.
+    Paths come from the database; refusing anything else means a tampered
+    record cannot make the page read other files.
     """
 
     if value is None or pd.isna(value) or not str(value).strip():
@@ -25,9 +27,8 @@ def resolve_evidence_path(value):
 
     path = path.resolve()
 
-    try:
-        path.relative_to(ROOT.resolve())
-    except ValueError:
+    if not any(path.is_relative_to(root.resolve())
+               for root in paths.ALLOWED_EVIDENCE_ROOTS):
         return None
 
     return path if path.is_file() else None

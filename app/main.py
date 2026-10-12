@@ -11,7 +11,7 @@ if str(ROOT) not in sys.path:
 import streamlit as st  # noqa: E402
 
 from app.ui import about, alerts, analytics, dashboard, evidence  # noqa: E402
-from app.ui import theme, upload  # noqa: E402
+from app.ui import auth, theme, upload  # noqa: E402
 from app.ui.data import DB_PATH, load_all  # noqa: E402
 
 st.set_page_config(
@@ -22,6 +22,26 @@ st.set_page_config(
 )
 
 theme.inject_css()
+
+# Stops here unless signed in (when DASHBOARD_PASSWORD is set).
+auth.require_login()
+
+
+@st.cache_resource
+def _housekeeping():
+    """Once per server start: remove old upload runs if retention is set."""
+
+    from app import housekeeping, paths
+
+    return housekeeping.cleanup_old_runs(
+        paths.OUTPUT_DIR / "uploads", housekeeping.retention_days()
+    )
+
+
+try:
+    _housekeeping()
+except OSError:
+    pass  # cleaning up is best effort; never block the app on it
 
 PAGES = {
     "Analyze footage": "upload",
@@ -53,6 +73,8 @@ with st.sidebar:
         if st.button("Refresh data"):
             st.cache_data.clear()
             st.rerun()
+
+    auth.logout_button()
 
     st.divider()
     st.caption(
