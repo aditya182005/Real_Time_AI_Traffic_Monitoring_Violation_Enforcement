@@ -1,6 +1,8 @@
 import contextlib
 import io
 import sqlite3
+
+from tests.db_helpers import db_connect
 import sys
 import tempfile
 import types
@@ -115,7 +117,7 @@ class DispatchTests(unittest.TestCase):
         self.event_id = vl.log_collision_event(1, 2, "e.jpg", camera_id="C1")
 
     def status(self):
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             return conn.execute(
                 "SELECT alert_status FROM collision_events WHERE id=?",
                 (self.event_id,),

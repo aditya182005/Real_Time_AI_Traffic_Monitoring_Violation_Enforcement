@@ -5,6 +5,8 @@ See tests/fake_streamlit.py for what this does and does not prove.
 
 import importlib
 import sqlite3
+
+from tests.db_helpers import db_connect
 import sys
 import tempfile
 import types
@@ -266,7 +268,7 @@ class UploadFlowTests(PageTestCase):
         self.assertEqual(len(summary.violations_of("red_light")), 1)
         self.assertEqual(self.st.cache_data.cleared, 1)
 
-        with sqlite3.connect(self.dir / "t.db") as conn:
+        with db_connect(self.dir / "t.db") as conn:
             rows = conn.execute(
                 "SELECT violation_type, camera_id, source "
                 "FROM violation_records").fetchall()

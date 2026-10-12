@@ -1,4 +1,6 @@
 import sqlite3
+
+from tests.db_helpers import db_connect
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,7 +20,7 @@ class ViolationLoggerTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def rows(self):
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             return conn.execute(
                 "SELECT event_key, violation_type, fine_amount, evidence_path "
                 "FROM violation_records ORDER BY id"

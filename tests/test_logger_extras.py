@@ -1,4 +1,6 @@
 import sqlite3
+
+from tests.db_helpers import db_connect
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,7 +20,7 @@ class LoggerExtrasTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def columns(self, table):
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             return {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
 
     def test_wrong_way_has_a_demo_fine(self):
@@ -27,7 +29,7 @@ class LoggerExtrasTests(unittest.TestCase):
     def test_camera_id_is_stored_on_violations(self):
         vl.log_violation("k", 1, "wrong_way", "e.jpg", camera_id="CAM-7")
 
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             row = conn.execute(
                 "SELECT camera_id, fine_amount FROM violation_records"
             ).fetchone()
@@ -41,7 +43,7 @@ class LoggerExtrasTests(unittest.TestCase):
         )
         vl.set_alert_status(event_id, "sent")
 
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             row = conn.execute(
                 "SELECT track_id_1, track_id_2, alert_status, camera_id, "
                 "source, crop_path FROM collision_events"
@@ -52,7 +54,7 @@ class LoggerExtrasTests(unittest.TestCase):
     def test_priority_event_records_the_override(self):
         vl.log_priority_event("ambulance", 0.91, camera_id="C", source="s")
 
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             row = conn.execute(
                 "SELECT vehicle_class, signal_override, camera_id "
                 "FROM priority_events"
@@ -62,7 +64,7 @@ class LoggerExtrasTests(unittest.TestCase):
 
     def test_old_databases_are_migrated_without_losing_rows(self):
         # The schema as first released: none of the later columns exist.
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             conn.execute("""CREATE TABLE violation_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_key TEXT NOT NULL UNIQUE, track_id INTEGER NOT NULL,
@@ -92,7 +94,7 @@ class LoggerExtrasTests(unittest.TestCase):
             self.columns("collision_events"),
         )
 
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             self.assertEqual(
                 conn.execute(
                     "SELECT COUNT(*) FROM violation_records").fetchone()[0], 1
