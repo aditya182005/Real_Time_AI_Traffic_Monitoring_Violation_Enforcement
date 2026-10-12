@@ -75,6 +75,7 @@ def render(data):
     )
 
     counts = analytics.alert_status_counts(collisions)
+    metrics = analytics.alert_metrics(collisions)
     theme.gantry([
         ("Alerts sent", counts["sent"], "SMS accepted by Twilio",
          "green" if counts["sent"] else "white"),
@@ -82,6 +83,17 @@ def render(data):
         ("Skipped", counts["skipped"], "not set up, or alerts off", "amber"),
         ("Failed", counts["failed"], "Twilio reported an error",
          "red" if counts["failed"] else "white"),
+        ("Success rate",
+         "–" if metrics["success_rate"] is None
+         else f"{metrics['success_rate'] * 100:.0f}%",
+         f"of {metrics['attempted']} attempted" if metrics["attempted"]
+         else "no alerts attempted yet", "white"),
+        ("Typical delay",
+         "–" if metrics["median_ms"] is None
+         else f"{metrics['median_ms'] / 1000:.1f} s",
+         "detection to Twilio's reply (median)"
+         if metrics["median_ms"] is not None
+         else "no sent alerts yet", "white"),
     ])
 
     _twilio_panel()

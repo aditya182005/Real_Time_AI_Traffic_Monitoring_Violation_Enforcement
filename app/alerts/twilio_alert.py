@@ -11,6 +11,7 @@ import os
 import re
 import sys
 import threading
+import time
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -201,13 +202,18 @@ def dispatch(event_id, message, sync=False, sender=send_alert, on_done=None):
     in flight still finishes if the program ends right afterwards.
     """
 
+    # The clock starts when the collision is handed to us, so the figure
+    # covers any wait for the background thread as well as Twilio itself.
+    detected_at = time.perf_counter()
+
     def work():
         try:
             status = sender(message)
         except Exception as exc:  # never lose the record of what happened
             status = f"failed: {_describe(exc)}"
 
-        set_alert_status(event_id, status)
+        latency_ms = (time.perf_counter() - detected_at) * 1000
+        set_alert_status(event_id, status, latency_ms=latency_ms)
 
         if on_done is not None:
             on_done(status)
@@ -265,12 +271,14 @@ def main(argv=None, client_factory=None):
               "test SMS.")
         return 0
 
+    started = time.perf_counter()
     result = send_alert(
         TEST_MESSAGE,
         voice=args.call or None,
         client_factory=client_factory,
     )
-    print(f"\nResult: {result}")
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    print(f"\nResult: {result}  ({elapsed_ms:.0f} ms)")
 
     return 0 if result.startswith("sent") else 1
 
