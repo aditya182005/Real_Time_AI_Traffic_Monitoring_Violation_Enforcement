@@ -1,4 +1,6 @@
 import sqlite3
+
+from tests.db_helpers import db_connect
 import tempfile
 import time
 import unittest
@@ -24,7 +26,7 @@ class TempDatabase(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def latency(self, event_id):
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             return conn.execute(
                 "SELECT alert_status, alert_latency_ms "
                 "FROM collision_events WHERE id = ?", (event_id,)
@@ -69,7 +71,7 @@ class LatencyStorageTests(TempDatabase):
         self.assertIsNone(self.latency(event)[1])
 
     def test_old_databases_gain_the_column(self):
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             conn.execute("""
                 CREATE TABLE collision_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,7 +89,7 @@ class LatencyStorageTests(TempDatabase):
 
         vl.setup_database()
 
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             columns = {r[1] for r in
                        conn.execute("PRAGMA table_info(collision_events)")}
             rows = conn.execute(

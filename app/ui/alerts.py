@@ -1,7 +1,8 @@
 import streamlit as st
 
+from app import audit
 from app.alerts import twilio_alert
-from app.ui import analytics, theme
+from app.ui import analytics, auth, theme
 from app.ui.helpers import show_records
 
 SETTING_LABELS = {
@@ -44,18 +45,26 @@ def _twilio_panel():
 
     ready = twilio_alert.is_ready()
 
-    if st.button("Send a test message", disabled=not ready,
+    may_send = auth.can("operate")
+
+    if st.button("Send a test message", disabled=not (ready and may_send),
                  key="twilio_test",
                  help="Sends one SMS to the number in ALERT_TO_PHONE."):
         with st.spinner("Sending…"):
             result = twilio_alert.send_alert(TEST_MESSAGE)
+
+        audit.record("test_sms", user=(auth.current_user() or {}).get("name"),
+                     role=auth.current_role(), address=auth.client_address(),
+                     detail=result.split(":")[0])
 
         if result.startswith("sent"):
             st.success(f"Test message result: {result}.")
         else:
             st.error(f"Test message result: {result}.")
 
-    if not configured:
+    if not may_send:
+        st.caption("Only operators and admins can send a test message.")
+    elif not configured:
         st.caption("Fill in the four settings above to turn this on.")
     else:
         st.caption(

@@ -74,10 +74,13 @@ def render(data):
 
     def describe(i):
         row = evidence.iloc[i]
+        plate = row.get("plate_text")
+        plate = f", plate {plate}" if isinstance(plate, str) and plate else ""
+
         return (
             f"{row['kind']}, {row.get('violation_type', '')}, "
-            f"track {row.get('track_id', row.get('track_id_1', '?'))}, "
-            f"{str(row.get('timestamp', ''))[:19]}"
+            f"track {row.get('track_id', row.get('track_id_1', '?'))}"
+            f"{plate}, {str(row.get('timestamp', ''))[:19]}"
         )
 
     index = st.selectbox(

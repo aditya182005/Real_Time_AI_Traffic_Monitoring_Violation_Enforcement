@@ -10,3 +10,6 @@ outputs/
 # Ultralytics label caches embed absolute paths and are rebuilt automatically.
 *.cache
 .pytest_cache/
+
+users.json
+logs/

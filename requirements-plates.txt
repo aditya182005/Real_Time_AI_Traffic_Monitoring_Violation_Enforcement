@@ -1,0 +1,4 @@
+# Optional: license-plate reading. Pulls in PyTorch (already needed by
+# ultralytics) and downloads its language model on first use.
+-r requirements.txt
+easyocr>=1.7

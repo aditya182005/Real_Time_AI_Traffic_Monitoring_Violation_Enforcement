@@ -5,6 +5,8 @@ Examples (from the project root):
     python run_video.py --no-display
     python run_video.py --speed --distance-m 12 --speed-limit 50 --collisions
     python run_video.py --input clip.mp4 --signal cycle --wrong-way --no-save
+    python run_video.py --input rtsp://192.168.1.20/stream1 --collisions
+    python run_video.py --input 0 --max-seconds 60 --plates     # webcam
 
 This uses the same settings and code as the "Analyze footage" page of the
 dashboard, so results match.
@@ -12,16 +14,18 @@ dashboard, so results match.
 
 import argparse
 import os
+import threading
 import uuid
 from pathlib import Path
 
 import cv2
 
-from app import paths
+from app import live, paths, plates
 from app.analysis import VideoSettings, build_processor, validate_settings
 
 ROOT = Path(__file__).resolve().parent
 OUTPUT_DIR = paths.OUTPUT_DIR
+DEFAULT_OUTPUT = "outputs/detections/tracked_traffic.mp4"
 
 
 def build_parser(add_help=True):
@@ -33,9 +37,14 @@ def build_parser(add_help=True):
         add_help=add_help,
     )
 
-    parser.add_argument("--input", default="data/videos/traffic.mp4")
     parser.add_argument(
-        "--output", default="outputs/detections/tracked_traffic.mp4"
+        "--input", default="data/videos/traffic.mp4",
+        help="A video file, a webcam number (0), or a live stream address "
+             "(rtsp://, http://, rtmp://). Live runs go on until Ctrl+C or "
+             "--max-seconds.")
+    parser.add_argument(
+        "--output", default=DEFAULT_OUTPUT,
+        help="Annotated video to write (files only; live runs write none)."
     )
     parser.add_argument(
         "--camera-id", default=os.getenv("CAMERA_ID", "CAM-01"),
@@ -79,6 +88,11 @@ def build_parser(add_help=True):
         help="Send a Twilio SMS for each collision (needs a .env file)."
     )
     other.add_argument(
+        "--plates", action="store_true",
+        help="Read the plate of each violating vehicle (needs EasyOCR: "
+             "pip install -r requirements-plates.txt)."
+    )
+    other.add_argument(
         "--emergency", action="store_true",
         help="Turn the simulated signal green for emergency vehicles "
              "(needs models/emergency_vehicle.pt)."
@@ -86,6 +100,8 @@ def build_parser(add_help=True):
 
     run = parser.add_argument_group("run options")
     run.add_argument("--max-frames", type=int, default=None)
+    run.add_argument("--max-seconds", type=float, default=None,
+                     help="Stop after this many seconds (useful live).")
     run.add_argument("--no-save", action="store_true",
                      help="Do not write results to the database.")
     run.add_argument("--no-display", action="store_true",
@@ -113,6 +129,7 @@ def settings_from_args(args):
         check_collisions=args.collisions,
         send_alerts=args.send_alerts,
         use_emergency=args.emergency,
+        read_plates=args.plates,
         save_to_db=not args.no_save,
     )
 
@@ -138,11 +155,21 @@ def main(argv=None, **components):
     return run(parser.parse_args(argv), parser, **components)
 
 
-def run(args, parser, detector=None, tracker=None, emergency_detector=None):
+def is_live(text):
+    """A webcam number or a stream address, as opposed to a file path."""
+
+    text = str(text).strip()
+
+    return text.isdigit() or "://" in text
+
+
+def run(args, parser, detector=None, tracker=None, emergency_detector=None,
+        plate_reader=None, plate_locator=None,
+        capture_factory=live.LatestFrameCapture):
     """Run the pipeline for parsed arguments and return the summary.
 
-    ``parser`` is only used to report bad options. ``detector``, ``tracker``
-    and ``emergency_detector`` are for tests.
+    ``parser`` is only used to report bad options. The keyword arguments
+    after it are for tests.
     """
 
     settings = settings_from_args(args)
@@ -155,7 +182,27 @@ def run(args, parser, detector=None, tracker=None, emergency_detector=None):
     if args.send_alerts and not args.collisions:
         parser.error("--send-alerts needs --collisions.")
 
-    width, height = video_size(args.input)
+    streaming = is_live(args.input)
+    source = None
+
+    if streaming:
+        try:
+            source = live.parse_source(args.input)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        if args.output != DEFAULT_OUTPUT:
+            parser.error("--output is not used for live input (no video "
+                         "file is written).")
+
+    if args.plates and plate_reader is None:
+        plate_reader, plate_locator = plates.load_tools()
+
+        if plate_reader is None:
+            parser.error(
+                "--plates needs the plate reader: "
+                "pip install -r requirements-plates.txt "
+                "(and PLATE_OCR must not be 'off').")
 
     if detector is None:
         from app.detection.detector import VehicleDetector
@@ -181,25 +228,78 @@ def run(args, parser, detector=None, tracker=None, emergency_detector=None):
     # A fresh run ID keeps event keys unique: track IDs and frame numbers
     # repeat between runs, and a repeated key is silently ignored.
     run_id = uuid.uuid4().hex[:8]
+    capture = None
+    stop = threading.Event()
+
+    if streaming:
+        print(f"Connecting to {live.redact(source)} ...")
+        capture = capture_factory(source)
+
+        if not capture.wait_for_first_frame():
+            error = capture.last_error or "timed out"
+            capture.release()
+            parser.exit(1, f"No picture arrived from the camera ({error}).\n")
+
+        width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        label = f"live:{args.camera_id}"
+    else:
+        width, height = video_size(args.input)
+        label = Path(args.input).name
 
     processor = build_processor(
         settings, width, height, detector, tracker, emergency_detector,
         OUTPUT_DIR / "violations" / run_id,
+        plate_reader=plate_reader, plate_locator=plate_locator,
     )
 
-    summary = processor.process(
-        args.input,
-        args.output,
+    options = dict(
         show=not args.no_display,
-        source=Path(args.input).name,
+        source=label,
         save_to_db=settings.save_to_db,
         max_frames=args.max_frames,
+        max_seconds=args.max_seconds,
         run_id=run_id,
     )
 
+    if not streaming:
+        summary = processor.process(args.input, args.output, **options)
+    else:
+        print("Monitoring. Press Ctrl+C to stop.")
+        result = {}
+
+        def work():
+            try:
+                result["summary"] = processor.process(
+                    None, None, capture=capture, live=True,
+                    stop_event=stop, **options)
+            except BaseException as exc:  # reported after the join below
+                result["error"] = exc
+
+        worker = threading.Thread(target=work, name="live-run", daemon=True)
+        worker.start()
+
+        try:
+            while worker.is_alive():
+                worker.join(timeout=0.5)
+        except KeyboardInterrupt:
+            print("\nStopping...")
+            stop.set()
+            worker.join(timeout=30)
+
+        capture.release()
+
+        if "error" in result:
+            raise result["error"]
+
+        summary = result["summary"]
+
+        if capture.status == "lost":
+            print(f"The camera was lost ({capture.last_error}).")
+
     print(
         f"\nDone: {summary.frames} frames in "
-        f"{summary.duration_seconds:.1f}s of video "
+        f"{summary.duration_seconds:.1f}s "
         f"({summary.processing_fps:.1f} FPS)."
     )
     print(
@@ -207,7 +307,9 @@ def run(args, parser, detector=None, tracker=None, emergency_detector=None):
         f"Possible collisions: {len(summary.collisions)}  "
         f"Emergency vehicles: {len(summary.emergency_events)}"
     )
-    print(f"Annotated video: {summary.output_path}")
+
+    if summary.output_path is not None:
+        print(f"Annotated video: {summary.output_path}")
 
     if settings.save_to_db:
         print("Results saved. Open the dashboard: streamlit run app/main.py")

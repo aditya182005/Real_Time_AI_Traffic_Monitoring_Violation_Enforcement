@@ -87,6 +87,43 @@ def _ultralytics_trainer(base, **options):
     return Path(model.trainer.save_dir)
 
 
+def _ultralytics_evaluator(weights, data, split="val"):
+    """Score finished weights on a dataset split.
+
+    Returns ``{"precision", "recall", "mAP50", "mAP50-95"}`` (0 to 1).
+    """
+
+    from ultralytics import YOLO
+
+    metrics = YOLO(str(weights)).val(data=str(data), split=split,
+                                     verbose=False).box
+
+    return {
+        "precision": float(metrics.mp),
+        "recall": float(metrics.mr),
+        "mAP50": float(metrics.map50),
+        "mAP50-95": float(metrics.map),
+    }
+
+
+def describe_quality(scores):
+    """A plain-language reading of the validation scores."""
+
+    map50 = scores["mAP50"]
+
+    if map50 >= 0.8:
+        verdict = "good"
+    elif map50 >= 0.5:
+        verdict = "usable, but expect misses and false alarms"
+    else:
+        verdict = ("weak: train longer, or check the labels, before "
+                   "relying on it")
+
+    return (f"mAP@0.5 {map50:.2f}, precision {scores['precision']:.2f}, "
+            f"recall {scores['recall']:.2f} on the validation images: "
+            f"{verdict}.")
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         description="Train the emergency-vehicle model and install it."
@@ -103,12 +140,17 @@ def build_parser():
     parser.add_argument("--name", default="emergency_vehicle")
     parser.add_argument("--output", default=str(INSTALLED_WEIGHTS),
                         help="where the finished weights are installed")
+    parser.add_argument("--no-evaluate", action="store_true",
+                        help="skip scoring the weights on the validation "
+                             "images after training")
 
     return parser
 
 
-def main(argv=None, trainer=_ultralytics_trainer):
-    """``trainer`` can be replaced in tests; it returns the run folder."""
+def main(argv=None, trainer=_ultralytics_trainer,
+         evaluator=_ultralytics_evaluator):
+    """``trainer`` (returns the run folder) and ``evaluator`` can be
+    replaced in tests."""
 
     args = build_parser().parse_args(argv)
 
@@ -149,6 +191,14 @@ def main(argv=None, trainer=_ultralytics_trainer):
     installed = install_weights(weights, args.output)
 
     print(f"\nTraining completed. Weights installed at {installed}")
+
+    if not args.no_evaluate:
+        try:
+            print(describe_quality(evaluator(installed, args.data)))
+        except Exception as exc:  # scoring is a bonus; the weights are safe
+            print(f"Could not score the weights ({type(exc).__name__}: "
+                  f"{exc}). They are installed anyway.")
+
     print("Check it with: python check_setup.py --full")
 
     return 0

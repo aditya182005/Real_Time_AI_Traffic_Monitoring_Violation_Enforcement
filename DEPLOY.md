@@ -24,7 +24,9 @@ Edit `.env`:
 
 | Setting | Why |
 |---|---|
-| `DASHBOARD_PASSWORD` | **Required in production.** With `APP_ENV=production` the app refuses to start without it. |
+| Sign-in | **Required in production**: the app refuses to show anything without it. Pick one: individual accounts (`docker compose exec traffic-agent python -m app.users add alice --role admin`), `DASHBOARD_PASSWORD`, or `AUTH_MODE=proxy` (below). |
+| `LIVE_CAMERAS` | Cameras people may start, as `Name=rtsp://...;Name2=...`. Contains passwords: keep `.env` private. |
+| `LIVE_MAX_CAMERAS` | Cameras analyzed at once (default 1). Each one needs its own share of CPU/GPU. |
 | `TWILIO_*`, `ALERT_TO_PHONE` | Optional SMS/voice alerts. Test first with `python -m app.alerts.twilio_alert --send` (see the README). |
 | `CAMERA_ID` | Name stored with records and alerts. |
 | `UPLOAD_RETENTION_DAYS` | Deletes upload-run folders older than this. `docker-compose.yml` sets 30. `0` keeps everything. Database rows are never deleted. |
@@ -57,6 +59,33 @@ Streamlit needs WebSocket support, which Caddy and nginx (with the usual
 `Upgrade` headers) both provide. Then close port 8501 to the outside in the
 firewall, or change the compose port mapping to `127.0.0.1:8501:8501`.
 
+### Per-user sign-in
+
+* **Accounts** (simplest): create them once with
+  `docker compose exec traffic-agent python -m app.users add NAME --role admin`
+  (roles: viewer, operator, admin). They live in `/data/users.json`, hashed.
+* **Identity-aware proxy** (campus/company login): run oauth2-proxy or
+  Cloudflare Access in front, set `AUTH_MODE=proxy`, `AUTH_PROXY_ADMINS`,
+  `AUTH_PROXY_OPERATORS` (emails). Everyone else the proxy lets in is a viewer.
+  See `deploy/oauth2-proxy.cfg`. **The app must be reachable only through the
+  proxy** (bind it to `127.0.0.1` or a private network); otherwise anyone can
+  send the identity header themselves.
+
+### Rate limiting and monitoring
+
+* The app locks a username (and a calling address) after repeated wrong
+  passwords, for the whole server, for a growing time. The counts live in
+  memory and reset on restart.
+* Also limit at the proxy: `deploy/nginx.conf` and `deploy/Caddyfile` are
+  working starting points. Make the proxy *overwrite* `X-Forwarded-For`, as
+  they do, because the app uses it for the address limit.
+* `deploy/fail2ban-traffic-agent.conf` bans addresses that keep failing, using
+  the app's log.
+* Logs: `docker compose logs -f`, and `/data/logs/traffic_agent.log` (rotated).
+  The audit trail is on the Admin page.
+* Uptime: monitor `https://your-domain/_stcore/health`. For deeper checks run
+  `docker compose exec traffic-agent python -m app.health --json` from cron.
+
 ## 4. Verify the deployment
 
 ```bash
@@ -84,14 +113,18 @@ directory; paths outside are refused.
 
 ## Security notes
 
-* One shared password protects the dashboard. There are no separate users or
-  roles. For several people with different rights, put an identity-aware proxy
-  (for example oauth2-proxy or Cloudflare Access) in front instead.
-* Failed logins are slowed down, but there is no account lockout or IP rate
-  limit; the reverse proxy is the place to add one.
+* Roles (viewer, operator, admin) are enforced in the app, but the checks are
+  in the page code of a single-process Streamlit app: treat it as appropriate
+  for a team or a college project, not for a hostile public audience.
 * Uploads are restricted to known image and video types, renamed on disk, and
   size-limited (200 MB, `.streamlit/config.toml`).
 * The container runs as a non-root user.
+* Live camera addresses may contain passwords. They are kept out of the screen,
+  the logs and the audit trail, but they are in `.env` in clear text.
+* License plates are personal data. Set `UPLOAD_RETENTION_DAYS`, limit who
+  signs in, and check the law that applies to you before storing them.
+* One server process runs the cameras; a restart stops them (start them again
+  from the Live camera page).
 * This is a student demonstration system. The fines are demo values and the
   detections are not legal evidence.
 

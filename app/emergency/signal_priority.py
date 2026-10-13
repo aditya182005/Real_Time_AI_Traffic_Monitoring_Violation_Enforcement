@@ -1,6 +1,7 @@
 
 import cv2
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -28,7 +29,7 @@ ROI_Y2 = 650
 
 
 def setup_database():
-    with sqlite3.connect(DB_PATH) as conn:
+    with closing(sqlite3.connect(DB_PATH)) as conn, conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS priority_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,7 +43,7 @@ def setup_database():
 
 
 def log_priority(track_id, vehicle_class, confidence):
-    with sqlite3.connect(DB_PATH) as conn:
+    with closing(sqlite3.connect(DB_PATH)) as conn, conn:
         conn.execute("""
             INSERT INTO priority_events (
                 track_id, vehicle_class, confidence,

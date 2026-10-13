@@ -10,8 +10,8 @@ if str(ROOT) not in sys.path:
 
 import streamlit as st  # noqa: E402
 
-from app.ui import about, alerts, analytics, dashboard, evidence  # noqa: E402
-from app.ui import auth, theme, upload  # noqa: E402
+from app.ui import about, admin, alerts, analytics, dashboard  # noqa: E402
+from app.ui import auth, evidence, live_page, theme, upload  # noqa: E402
 from app.ui.data import DB_PATH, load_all  # noqa: E402
 
 st.set_page_config(
@@ -43,13 +43,29 @@ try:
 except OSError:
     pass  # cleaning up is best effort; never block the app on it
 
-PAGES = {
-    "Analyze footage": "upload",
-    "Dashboard": "dashboard",
-    "Evidence": "evidence",
-    "Alerts": "alerts",
-    "About": "about",
-}
+# Pages grouped by what the person is doing, in the order they are listed.
+NAV = (
+    ("Overview", {"Dashboard": "dashboard"}),
+    ("Monitor", {"Analyze footage": "upload", "Live camera": "live"}),
+    ("Review", {"Evidence": "evidence", "Alerts": "alerts"}),
+    ("System", {"About": "about", "Admin": "admin"}),
+)
+
+PAGES = {}
+GROUP_STARTS = {}     # position in PAGES -> group heading
+
+for heading, members in NAV:
+    first = True
+
+    for label, key in members.items():
+        if key == "admin" and not auth.can("admin"):
+            continue
+
+        if first:
+            GROUP_STARTS[len(PAGES)] = heading
+            first = False
+
+        PAGES[label] = key
 
 # Pages that read the database and so need a date range.
 DATA_PAGES = ("dashboard", "evidence", "alerts")
@@ -58,7 +74,14 @@ with st.sidebar:
     theme.brand()
     st.caption("Smart traffic monitoring")
 
-    choice = st.radio("Go to", list(PAGES), label_visibility="collapsed")
+    theme.nav_groups(GROUP_STARTS)
+
+    # First visit with nothing recorded yet: start where the data comes from.
+    labels = list(PAGES)
+    first_page = 0 if DB_PATH.exists() else labels.index("Analyze footage")
+
+    choice = st.radio("Go to", labels, index=first_page,
+                      label_visibility="collapsed")
     page = PAGES[choice]
 
     start_date = date.today() - timedelta(days=30)
@@ -88,6 +111,10 @@ if start_date > end_date:
 
 if page == "upload":
     upload.render()
+elif page == "live":
+    live_page.render()
+elif page == "admin":
+    admin.render()
 elif page == "about":
     about.render()
 else:

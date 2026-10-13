@@ -7,7 +7,7 @@ import cv2
 import pandas as pd
 import streamlit as st
 
-from app import media, paths
+from app import audit, media, paths, plates
 from app.alerts import twilio_alert
 from app.analysis import (
     VideoSettings,
@@ -19,7 +19,7 @@ from app.analysis import (
 )
 from app.annotate import draw_calibration
 from app.detection.emergency_detector import EmergencyDetector
-from app.ui import theme
+from app.ui import auth, theme
 from app.ui.data import ROOT
 from app.ui.helpers import csv_bytes, show_df, show_image
 
@@ -65,6 +65,11 @@ def load_vehicle_detector():
 @st.cache_resource(show_spinner="Loading the emergency-vehicle model…")
 def load_emergency_detector():
     return EmergencyDetector()
+
+
+@st.cache_resource(show_spinner="Loading the plate reader (first time only)…")
+def load_plate_tools():
+    return plates.load_tools()
 
 
 def _load_models(use_emergency):
@@ -331,8 +336,14 @@ def _stage_sample():
 
 # -- video: settings --------------------------------------------------------
 
-def _settings_panel():
-    """Draw the settings widgets and return ``(settings, max_frames, live)``."""
+def _settings_panel(run_options=True, default_camera="CAM-01",
+                    camera_key="camera_id"):
+    """Draw the settings widgets and return ``(settings, max_frames, live)``.
+
+    ``run_options=False`` (the live camera page) leaves out the choices that
+    only make sense for a finished file: how much to analyze and the
+    live-feed switch.
+    """
 
     settings = VideoSettings()
 
@@ -430,20 +441,45 @@ def _settings_panel():
         if not ready:
             st.caption("The emergency-vehicle model is not installed.")
 
+    with st.expander("License plates"):
+        available = plates.reader_available()
+        settings.read_plates = st.checkbox(
+            "Read the plate of each vehicle that breaks a rule",
+            value=False, disabled=not available, key="read_plates",
+            help=None if available else
+            "Needs the optional plate reader: pip install -r "
+            "requirements-plates.txt")
+
+        if not available:
+            st.caption(
+                "The plate reader is not installed "
+                "(`pip install -r requirements-plates.txt`).")
+        else:
+            st.caption(
+                "Plates are personal data and OCR is often wrong on ordinary "
+                "traffic video. Treat a plate as a suggestion to check "
+                "against the evidence photo.")
+
     with st.container(border=True):
         st.markdown("**This run**")
         settings.camera_id = st.text_input(
-            "Camera name", "CAM-01", max_chars=30, key="camera_id",
+            "Camera name", default_camera, max_chars=30, key=camera_key,
             help="Stored with every record and used in alerts.")
-        frames_label = st.selectbox(
-            "How much to analyze", list(MAX_FRAME_CHOICES), key="max_frames")
-        live = st.checkbox("Show the live annotated feed", value=True,
-                           key="live_feed")
+        max_frames, live = None, False
+
+        if run_options:
+            frames_label = st.selectbox(
+                "How much to analyze", list(MAX_FRAME_CHOICES),
+                key="max_frames")
+            max_frames = MAX_FRAME_CHOICES[frames_label]
+            live = st.checkbox("Show the live annotated feed", value=True,
+                               key="live_feed")
+
         settings.save_to_db = st.checkbox(
             "Save results to the database", value=True, key="video_save",
             help="Adds records to the Dashboard, Evidence and Alerts pages.")
 
-    return settings, MAX_FRAME_CHOICES[frames_label], live
+    return settings, max_frames, live
 
 
 # -- video: tab -------------------------------------------------------------
@@ -541,6 +577,8 @@ def _run_video(staged, settings, max_frames, live):
         return
 
     detector, emergency = models
+    plate_reader, plate_locator = (
+        load_plate_tools() if settings.read_plates else (None, None))
 
     from app.tracking.tracker import VehicleTracker
 
@@ -551,6 +589,7 @@ def _run_video(staged, settings, max_frames, live):
     processor = build_processor(
         settings, staged["width"], staged["height"],
         detector, VehicleTracker(), emergency, run_dir / "evidence",
+        plate_reader=plate_reader, plate_locator=plate_locator,
     )
 
     bar = st.progress(0.0, text="Starting…")
@@ -598,6 +637,12 @@ def _run_video(staged, settings, max_frames, live):
 
     if slot is not None:
         slot.empty()
+
+    audit.record(
+        "analysis_run", user=(auth.current_user() or {}).get("name"),
+        role=auth.current_role(), address=auth.client_address(),
+        detail=f"{staged['name']}: {len(summary.violations)} violation(s), "
+               f"{len(summary.collisions)} collision(s)")
 
     st.session_state["video_result"] = {
         "summary": summary,
@@ -697,6 +742,8 @@ def _show_video_result(result):
                     "Vehicle": v["vehicle"],
                     "Detail": _violation_detail(v, settings),
                     "Frame": v["frame"],
+                    **({"Plate": v.get("plate_text") or "unreadable"}
+                       if settings.read_plates else {}),
                 }
                 for v in summary.violations
             ])
@@ -785,6 +832,11 @@ def render():
         "Upload traffic photos or a video from a fixed camera. Vehicles are "
         "detected and tracked, and violations are saved with evidence.",
     )
+
+    if not auth.can("operate"):
+        st.info("Your account can view results but not analyze footage. "
+                "Ask an operator or admin to run an analysis.")
+        return
 
     tab_video, tab_images, tab_help = st.tabs(["Video", "Images", "Tips"])
 

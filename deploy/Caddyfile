@@ -1,0 +1,27 @@
+# HTTPS reverse proxy with automatic certificates, plus login rate limiting.
+# Needs a Caddy build that includes the rate_limit plugin:
+#   xcaddy build --with github.com/mholt/caddy-ratelimit
+# Replace the domain. Streamlit needs WebSockets; Caddy proxies them as-is.
+
+traffic.example.com {
+    encode gzip
+
+    # Slow down anyone hammering the app (and so its login form).
+    rate_limit {
+        zone per_ip {
+            key    {remote_host}
+            events 120
+            window 1m
+        }
+    }
+
+    # Overwrite, never trust, what the client says about itself.
+    reverse_proxy localhost:8501 {
+        header_up X-Forwarded-For {remote_host}
+    }
+
+    # Uploads can be large (the app limits them to 200 MB).
+    request_body {
+        max_size 210MB
+    }
+}

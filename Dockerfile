@@ -17,9 +17,14 @@ WORKDIR /app
 RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # Headless OpenCV (no display libraries); it replaces opencv-python.
-COPY requirements.txt .
+COPY requirements.txt requirements-plates.txt ./
 RUN grep -v '^opencv-python' requirements.txt > requirements.docker.txt \
     && pip install -r requirements.docker.txt opencv-python-headless
+
+# License-plate reading is optional (adds EasyOCR, about 1 GB with its model):
+#   docker compose build --build-arg WITH_PLATES=1
+ARG WITH_PLATES=0
+RUN if [ "$WITH_PLATES" = "1" ]; then pip install easyocr; fi
 
 COPY . .
 

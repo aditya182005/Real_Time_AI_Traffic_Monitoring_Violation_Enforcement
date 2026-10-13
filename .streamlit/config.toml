@@ -1,10 +1,10 @@
 [theme]
-# Light "concrete and road sign" palette; custom pieces are in app/ui/theme.py.
+# Pine and terracotta on warm stone. Custom pieces: app/ui/theme.py.
 base = "light"
-primaryColor = "#0F4C9A"
-backgroundColor = "#E8EAEC"
-secondaryBackgroundColor = "#DCE0E4"
-textColor = "#14202B"
+primaryColor = "#B8481F"
+backgroundColor = "#F6F2ED"
+secondaryBackgroundColor = "#EBE4DC"
+textColor = "#1C2426"
 font = "sans serif"
 
 [server]

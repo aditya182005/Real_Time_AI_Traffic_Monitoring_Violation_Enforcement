@@ -174,3 +174,78 @@ class MainTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EvaluationTests(unittest.TestCase):
+
+    SCORES = {"precision": 0.9, "recall": 0.85, "mAP50": 0.91,
+              "mAP50-95": 0.7}
+
+    def run_with(self, evaluator, *extra):
+        def trainer(base, **options):
+            return make_run(root)
+
+        with tempfile.TemporaryDirectory() as root:
+            data = make_dataset(root)
+            output = Path(root) / "models" / "emergency_vehicle.pt"
+            out = io.StringIO()
+
+            with contextlib.redirect_stdout(out):
+                code = te.main(["--data", str(data), "--output",
+                                str(output), *extra], trainer=trainer,
+                               evaluator=evaluator)
+
+            installed = output.is_file()
+
+        return code, installed, out.getvalue()
+
+    def test_scores_are_printed_in_plain_words(self):
+        code, _, out = self.run_with(lambda weights, data: self.SCORES)
+
+        self.assertEqual(code, 0)
+        self.assertIn("mAP@0.5 0.91", out)
+        self.assertIn("good", out)
+
+    def test_verdicts(self):
+        for map50, word in ((0.85, "good"), (0.6, "usable"), (0.2, "weak")):
+            text = te.describe_quality({**self.SCORES, "mAP50": map50})
+
+            self.assertIn(word, text)
+
+    def test_a_failing_evaluation_does_not_lose_the_weights(self):
+        def broken(weights, data):
+            raise RuntimeError("val exploded")
+
+        code, installed, out = self.run_with(broken)
+
+        self.assertEqual(code, 0)
+        self.assertTrue(installed)
+        self.assertIn("Could not score the weights", out)
+
+    def test_evaluation_can_be_skipped(self):
+        called = []
+
+        code, _, out = self.run_with(
+            lambda w, d: called.append(1) or self.SCORES, "--no-evaluate")
+
+        self.assertEqual((code, called), (0, []))
+        self.assertNotIn("mAP", out)
+
+
+class NotebookTests(unittest.TestCase):
+
+    def test_the_colab_notebook_is_valid_and_runs_the_real_script(self):
+        import json
+
+        path = Path(te.__file__).parent / "notebooks" / \
+            "train_emergency_colab.ipynb"
+        notebook = json.loads(path.read_text())
+        source = "\n".join("".join(c["source"]) for c in notebook["cells"])
+
+        self.assertEqual(notebook["nbformat"], 4)
+        self.assertIn("python train_emergency.py", source)
+        self.assertIn("files.download('models/emergency_vehicle.pt')", source)
+
+        # Every option the notebook passes must exist in the script.
+        parser = te.build_parser()
+        parser.parse_args(["--epochs", "60", "--device", "0", "--batch", "-1"])

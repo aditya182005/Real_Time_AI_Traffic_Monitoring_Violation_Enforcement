@@ -61,8 +61,9 @@ class UploadedFile:
 
 class FakeStreamlit(types.ModuleType):
 
-    def __init__(self, uploads=None, clicks=(), values=None):
+    def __init__(self, uploads=None, clicks=(), values=None, headers=None):
         super().__init__("streamlit")
+        self.context = types.SimpleNamespace(headers=dict(headers or {}))
         self.session_state = {}
         self.calls = []
         self.uploads = uploads or {}
@@ -122,6 +123,14 @@ class FakeStreamlit(types.ModuleType):
     def stop(self):
         raise StopPage()
 
+    def fragment(self, *args, **kwargs):
+        """``@st.fragment`` or ``@st.fragment(run_every=...)``: run as is."""
+
+        if len(args) == 1 and callable(args[0]) and not kwargs:
+            return args[0]
+
+        return lambda function: function
+
     # -- widgets: return the default, or a value the test chose ------------
 
     def _value(self, key, default):
@@ -144,6 +153,7 @@ class FakeStreamlit(types.ModuleType):
         return self._value(key, min_value if value is None else value)
 
     def radio(self, label, options, index=0, key=None, **kwargs):
+        self.calls.append(("radio", (label, list(options)), {"key": key}))
         # Widgets without a key (the sidebar page picker) are looked up
         # by their label.
         default = self.values.get(label, list(options)[index])

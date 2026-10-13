@@ -1,4 +1,6 @@
 import sqlite3
+
+from tests.db_helpers import db_connect
 import tempfile
 import unittest
 from pathlib import Path
@@ -93,7 +95,7 @@ class VideoProcessorTests(unittest.TestCase):
     def records(self):
         if not self.db.exists():
             return []
-        with sqlite3.connect(self.db) as conn:
+        with db_connect(self.db) as conn:
             return conn.execute(
                 "SELECT track_id, violation_type, signal_state, "
                 "evidence_path FROM violation_records"
