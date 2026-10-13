@@ -27,6 +27,8 @@ EXTRA_COLUMNS = {
         "source": "TEXT",
         "crop_path": "TEXT",
         "camera_id": "TEXT",
+        "plate_text": "TEXT",
+        "plate_confidence": "REAL",
     },
     "collision_events": {
         "alert_status": "TEXT",
@@ -73,7 +75,9 @@ def _create_table(conn):
             evidence_path TEXT,
             source TEXT,
             crop_path TEXT,
-            camera_id TEXT
+            camera_id TEXT,
+            plate_text TEXT,
+            plate_confidence REAL
         )
     """)
 
@@ -162,7 +166,9 @@ def log_violation(
     signal_state=None,
     source=None,
     crop_path=None,
-    camera_id=None
+    camera_id=None,
+    plate_text=None,
+    plate_confidence=None,
 ):
     """Insert a violation. Returns True if a new row was written.
 
@@ -198,9 +204,11 @@ def log_violation(
                 evidence_path,
                 source,
                 crop_path,
-                camera_id
+                camera_id,
+                plate_text,
+                plate_confidence
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             event_key,
             int(track_id),
@@ -213,7 +221,9 @@ def log_violation(
             str(evidence_path) if evidence_path else None,
             source,
             str(crop_path) if crop_path else None,
-            camera_id
+            camera_id,
+            plate_text,
+            plate_confidence,
         ))
 
         conn.commit()

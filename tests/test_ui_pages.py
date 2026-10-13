@@ -62,6 +62,8 @@ class PageTestCase(unittest.TestCase):
 
     def start(self, **kwargs):
         self.st = FakeStreamlit(**kwargs)
+        # Pages assume the sign-in gate already ran; act as an operator.
+        self.st.session_state["user"] = {"name": "tester", "role": "operator"}
         self.addCleanup(install(self.st))
 
         return self.st

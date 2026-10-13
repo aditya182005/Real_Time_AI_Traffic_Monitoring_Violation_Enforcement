@@ -15,6 +15,7 @@ from app.annotate import (
     draw_banner,
     draw_box,
 )
+from app import plates
 from app.violation.collision_logic import CollisionHeuristic
 from app.violation.red_light import RedLightDetector
 from app.violation.signal import SignalSimulator
@@ -125,6 +126,10 @@ class TrafficVideoProcessor:
         send_collision_alerts=False,
         camera_id="CAM-01",
         alert_sender=None,   # test hook: callable(message) -> status string
+        plate_reader=None,   # object with read(image) -> [(text, conf)]
+        plate_locator=None,  # optional locator(crop) -> [(x1, y1, x2, y2)]
+        plate_every=5,       # sample a vehicle's plate every N frames
+        plate_min_height=60, # skip vehicles smaller than this (pixels)
     ):
         # Imported lazily so the heavy YOLO / supervision stack is only
         # loaded when real components are needed (tests inject fakes).
@@ -151,6 +156,10 @@ class TrafficVideoProcessor:
         self.send_collision_alerts = send_collision_alerts
         self.camera_id = camera_id
         self.alert_sender = alert_sender
+        self.plate_reader = plate_reader
+        self.plate_locator = plate_locator
+        self.plate_every = max(1, int(plate_every))
+        self.plate_min_height = plate_min_height
         self.evidence_dir = (
             Path(evidence_dir)
             if evidence_dir
@@ -167,6 +176,26 @@ class TrafficVideoProcessor:
 
         return rx1 <= cx <= rx2 and ry1 <= cy <= ry2
 
+    def _read_plate(self, votes, track_id, image, bbox):
+        """Read one vehicle's plate from ``image`` (a frame not yet drawn on)."""
+
+        height, width = image.shape[:2]
+        x1, y1 = max(0, bbox[0]), max(0, bbox[1])
+        x2, y2 = min(width, bbox[2]), min(height, bbox[3])
+
+        if y2 - y1 < self.plate_min_height or x2 <= x1:
+            return
+
+        try:
+            result = plates.read_plate(
+                self.plate_reader, image[y1:y2, x1:x2], self.plate_locator
+            )
+        except Exception as exc:  # OCR trouble must never stop the analysis
+            print(f"Plate reading failed: {type(exc).__name__}: {exc}")
+            return
+
+        votes.add(track_id, result)
+
     def process(
         self,
         input_path,
@@ -179,6 +208,11 @@ class TrafficVideoProcessor:
         run_id=None,
         frame_callback=None,
         preview_every=4,
+        capture=None,
+        live=False,
+        stop_event=None,
+        max_seconds=None,
+        on_event=None,
     ):
         """Run the pipeline over a video and return a ``VideoSummary``.
 
@@ -190,9 +224,20 @@ class TrafficVideoProcessor:
         save_to_db:     log events / density to SQLite.
         max_frames:     stop early after this many frames (long uploads).
         run_id:         makes event keys and evidence names unique per run.
+        capture:        an already-open source with the ``cv2.VideoCapture``
+                        methods (see app/live.py); replaces ``input_path``.
+        live:           the source never ends. Time comes from the wall
+                        clock (frames may be dropped), no video file is
+                        written when ``output_path`` is None, and an empty
+                        read means "wait for the next frame".
+        stop_event:     a ``threading.Event``; the run ends when it is set.
+        max_seconds:    stop after this much real time (live runs).
+        on_event:       optional ``callback(kind, entry)`` for each violation
+                        ("violation") and collision ("collision").
         """
 
-        cap = cv2.VideoCapture(str(input_path))
+        cap = capture if capture is not None else cv2.VideoCapture(
+            str(input_path))
 
         if not cap.isOpened():
             raise ValueError(f"Could not open video: {input_path}")
@@ -205,16 +250,21 @@ class TrafficVideoProcessor:
         if not fps or fps <= 0:
             fps = 30
 
-        # VideoWriter fails silently when the folder is missing.
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
         self.evidence_dir.mkdir(parents=True, exist_ok=True)
 
-        out = _open_writer(output_path, fps, (width, height))
+        out = None
 
-        if out is None:
-            cap.release()
-            raise ValueError(f"Could not open output video: {output_path}")
+        if output_path is not None:
+            # VideoWriter fails silently when the folder is missing.
+            output_path = Path(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            out = _open_writer(output_path, fps, (width, height))
+
+            if out is None:
+                cap.release()
+                raise ValueError(
+                    f"Could not open output video: {output_path}")
 
         # Fresh detector state for every run.
         red_light = RedLightDetector(self.stop_line_y)
@@ -232,6 +282,9 @@ class TrafficVideoProcessor:
         )
         collision_heuristic = (
             CollisionHeuristic() if self.detect_collisions else None
+        )
+        plate_votes = (
+            plates.PlateVotes() if self.plate_reader is not None else None
         )
 
         name_part = run_id or "run"
@@ -251,6 +304,7 @@ class TrafficVideoProcessor:
         override_until = 0      # last frame the emergency override covers
         alert_threads = []
         frame_number = 0
+        tick = 0                # the time axis, in frames (see below)
         started = time.perf_counter()
 
         try:
@@ -259,13 +313,39 @@ class TrafficVideoProcessor:
                 if max_frames and frame_number >= max_frames:
                     break
 
+                if stop_event is not None and stop_event.is_set():
+                    break
+
+                if max_seconds and (
+                    time.perf_counter() - started >= max_seconds
+                ):
+                    break
+
                 ret, frame = cap.read()
 
                 if not ret:
+                    # A live source returning nothing is usually just "no
+                    # new frame yet"; it ends only when it says it is done.
+                    if live and not getattr(cap, "finished", True):
+                        continue
+
                     break
 
                 frame_number += 1
-                seconds = round((frame_number - 1) / fps, 2)
+
+                # Every time-based check (speed, signal cycle, emergency
+                # hold, density) runs on ``tick``. For a file it is the
+                # frame number. For a live stream it follows the wall clock,
+                # because frames may have been dropped.
+                if live:
+                    tick = max(
+                        tick + 1,
+                        int((time.perf_counter() - started) * fps) + 1,
+                    )
+                else:
+                    tick = frame_number
+
+                seconds = round((tick - 1) / fps, 2)
 
                 detections = self.detector.detect(frame)
                 tracked = self.tracker.update(detections)
@@ -287,7 +367,7 @@ class TrafficVideoProcessor:
                 )
 
                 if priority_active:
-                    override_until = frame_number + hold_frames
+                    override_until = tick + hold_frames
 
                     if not emergency_logged:
                         emergency_logged = True
@@ -309,10 +389,10 @@ class TrafficVideoProcessor:
                 elif not emergencies:
                     emergency_logged = False
 
-                override = frame_number <= override_until
+                override = tick <= override_until
                 signal_state = (
                     "GREEN" if override
-                    else self.signal.state_at(frame_number, fps)
+                    else self.signal.state_at(tick, fps)
                 )
 
                 # -- per-vehicle checks --------------------------------------
@@ -344,7 +424,7 @@ class TrafficVideoProcessor:
 
                         if speed_estimator is not None:
                             kmh = speed_estimator.update(
-                                track_id, center_x, bbox[3], frame_number, fps
+                                track_id, center_x, bbox[3], tick, fps
                             )
 
                             if kmh is not None and kmh > self.speed.limit_kmh:
@@ -363,6 +443,13 @@ class TrafficVideoProcessor:
                                 ("wrong_way", track_id, bbox, class_name, {})
                             )
                             flagged = True
+
+                    if (
+                        plate_votes is not None and track_id != -1
+                        and frame_number % self.plate_every == 0
+                        and plate_votes.wants_more(track_id)
+                    ):
+                        self._read_plate(plate_votes, track_id, frame, bbox)
 
                     measured = (
                         speed_estimator.speeds.get(track_id)
@@ -440,6 +527,16 @@ class TrafficVideoProcessor:
 
                 # -- save evidence AFTER drawing, then log once --------------
                 for kind, track_id, bbox, class_name, extra in events:
+                    plate = None
+
+                    if plate_votes is not None and track_id != -1:
+                        if plate_votes.best(track_id) is None:
+                            # Nothing read yet: try once on the clean frame.
+                            self._read_plate(
+                                plate_votes, track_id, clean, bbox)
+
+                        plate = plate_votes.best(track_id)
+
                     stem = (
                         f"{name_part}_{kind}_id_{track_id}"
                         f"_frame_{frame_number}"
@@ -471,9 +568,11 @@ class TrafficVideoProcessor:
                             source=source,
                             crop_path=crop_path,
                             camera_id=self.camera_id,
+                            plate_text=plate[0] if plate else None,
+                            plate_confidence=plate[1] if plate else None,
                         )
 
-                    summary.violations.append({
+                    entry = {
                         "type": kind,
                         "track_id": track_id,
                         "vehicle": class_name,
@@ -485,7 +584,13 @@ class TrafficVideoProcessor:
                         "speed_kmh": extra.get("speed_kmh"),
                         "evidence_path": str(evidence_path),
                         "crop_path": str(crop_path),
-                    })
+                        "plate_text": plate[0] if plate else None,
+                        "plate_confidence": plate[1] if plate else None,
+                    }
+                    summary.violations.append(entry)
+
+                    if on_event:
+                        on_event("violation", entry)
 
                     print(
                         f"{kind} detected: ID {track_id} "
@@ -561,15 +666,19 @@ class TrafficVideoProcessor:
 
                     summary.collisions.append(entry)
 
+                    if on_event:
+                        on_event("collision", entry)
+
                     print(message)
 
                 count = len(vehicles)
                 summary.peak_vehicles = max(summary.peak_vehicles, count)
-                density.setdefault(int((frame_number - 1) / fps), []).append(
+                density.setdefault(int((tick - 1) / fps), []).append(
                     count
                 )
 
-                out.write(frame)
+                if out is not None:
+                    out.write(frame)
 
                 if frame_callback and (frame_number % preview_every == 0):
                     frame_callback(frame, frame_number)
@@ -585,7 +694,9 @@ class TrafficVideoProcessor:
 
         finally:
             cap.release()
-            out.release()
+
+            if out is not None:
+                out.release()
 
             if show:
                 cv2.destroyAllWindows()

@@ -10,8 +10,8 @@ if str(ROOT) not in sys.path:
 
 import streamlit as st  # noqa: E402
 
-from app.ui import about, alerts, analytics, dashboard, evidence  # noqa: E402
-from app.ui import auth, theme, upload  # noqa: E402
+from app.ui import about, admin, alerts, analytics, dashboard  # noqa: E402
+from app.ui import auth, evidence, live_page, theme, upload  # noqa: E402
 from app.ui.data import DB_PATH, load_all  # noqa: E402
 
 st.set_page_config(
@@ -45,11 +45,15 @@ except OSError:
 
 PAGES = {
     "Analyze footage": "upload",
+    "Live camera": "live",
     "Dashboard": "dashboard",
     "Evidence": "evidence",
     "Alerts": "alerts",
     "About": "about",
 }
+
+if auth.can("admin"):
+    PAGES["Admin"] = "admin"
 
 # Pages that read the database and so need a date range.
 DATA_PAGES = ("dashboard", "evidence", "alerts")
@@ -88,6 +92,10 @@ if start_date > end_date:
 
 if page == "upload":
     upload.render()
+elif page == "live":
+    live_page.render()
+elif page == "admin":
+    admin.render()
 elif page == "about":
     about.render()
 else:

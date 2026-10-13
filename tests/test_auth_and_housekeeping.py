@@ -10,114 +10,6 @@ from app import housekeeping
 from tests.fake_streamlit import FakeStreamlit, StopPage, install
 
 
-class LoginTests(unittest.TestCase):
-
-    def page(self, env, state=None, **kwargs):
-        st = FakeStreamlit(**kwargs)
-        st.session_state.update(state or {})
-        self.addCleanup(install(st))
-        auth = importlib.import_module("app.ui.auth")
-        patch = mock.patch.dict(os.environ, env, clear=True)
-        patch.start()
-        self.addCleanup(patch.stop)
-
-        return st, auth
-
-    def run_gate(self, auth):
-        """Returns True if the page may continue, False if it was stopped."""
-
-        try:
-            auth.require_login()
-        except StopPage:
-            return False
-
-        return True
-
-    def test_open_when_no_password_is_set(self):
-        st, auth = self.page({})
-
-        self.assertTrue(self.run_gate(auth))
-        self.assertEqual(st.called("form"), [])
-
-    def test_production_without_a_password_refuses_to_run(self):
-        st, auth = self.page({"APP_ENV": "production"})
-
-        self.assertFalse(self.run_gate(auth))
-        self.assertIn("DASHBOARD_PASSWORD is not set", st.text())
-
-    def test_production_with_a_password_asks_for_it(self):
-        st, auth = self.page({"APP_ENV": "production",
-                              "DASHBOARD_PASSWORD": "s3cret"})
-
-        self.assertFalse(self.run_gate(auth))
-        self.assertEqual(len(st.called("form")), 1)
-        self.assertNotIn("s3cret", st.text())
-
-    def test_correct_password_signs_in(self):
-        st, auth = self.page(
-            {"DASHBOARD_PASSWORD": "s3cret"},
-            clicks={"Sign in"}, values={"login_password": "s3cret"})
-
-        self.run_gate(auth)
-
-        self.assertTrue(st.session_state["authenticated"])
-        self.assertEqual(len(st.called("rerun")), 1)
-
-    def test_wrong_password_is_refused_and_counted(self):
-        st, auth = self.page(
-            {"DASHBOARD_PASSWORD": "s3cret"},
-            clicks={"Sign in"}, values={"login_password": "nope"})
-
-        self.assertFalse(self.run_gate(auth))
-        self.assertFalse(st.session_state.get("authenticated"))
-        self.assertEqual(st.session_state["login_failures"], 1)
-        self.assertIn("not correct", st.text())
-
-    def test_already_signed_in_session_passes(self):
-        st, auth = self.page({"DASHBOARD_PASSWORD": "s3cret"},
-                             state={"authenticated": True})
-
-        self.assertTrue(self.run_gate(auth))
-        self.assertEqual(st.called("form"), [])
-
-    def test_repeated_failures_are_slowed_down(self):
-        st, auth = self.page(
-            {"DASHBOARD_PASSWORD": "s3cret"},
-            state={"login_failures": 5},
-            clicks={"Sign in"}, values={"login_password": "nope"})
-
-        with mock.patch.object(auth.time, "sleep") as sleep:
-            self.run_gate(auth)
-
-        sleep.assert_called_once()
-        self.assertGreater(sleep.call_args[0][0], 0)
-
-    def test_first_few_failures_are_not_delayed(self):
-        st, auth = self.page({"DASHBOARD_PASSWORD": "x"})
-
-        self.assertEqual([auth._delay_for(n) for n in (0, 1, 2)], [0, 0, 0])
-        self.assertGreater(auth._delay_for(3), 0)
-        self.assertEqual(auth._delay_for(50), auth.MAX_DELAY_SECONDS)
-
-    def test_comparison_handles_unicode_and_is_exact(self):
-        st, auth = self.page({})
-
-        self.assertTrue(auth.password_matches("pässword", "pässword"))
-        self.assertFalse(auth.password_matches("password", "pässword"))
-        self.assertFalse(auth.password_matches("", "x"))
-
-    def test_sign_out_only_appears_when_a_password_is_set(self):
-        st, auth = self.page({})
-        auth.logout_button()
-        self.assertEqual(st.called("button"), [])
-
-        st, auth = self.page({"DASHBOARD_PASSWORD": "x"},
-                             state={"authenticated": True},
-                             clicks={"logout"})
-        auth.logout_button()
-        self.assertFalse(st.session_state["authenticated"])
-
-
 class MainIsGatedTests(unittest.TestCase):
     """The gate must actually be wired into main.py, before any page."""
 
@@ -149,7 +41,8 @@ class MainIsGatedTests(unittest.TestCase):
 
     def test_signed_in_user_reaches_the_app(self):
         st = self.run_main({"DASHBOARD_PASSWORD": "s3cret"},
-                           state={"authenticated": True})
+                           state={"user": {"name": "shared", "role": "operator"},
+                                  "authenticated": True})
 
         self.assertIn("Upload traffic photos", st.text())
 

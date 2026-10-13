@@ -100,6 +100,7 @@ class VideoSettings:
     send_alerts: bool = False
 
     use_emergency: bool = False
+    read_plates: bool = False           # needs the optional EasyOCR package
     save_to_db: bool = True
 
 
@@ -149,7 +150,8 @@ def build_signal(settings):
 
 
 def build_processor(settings, width, height, detector, tracker,
-                    emergency_detector, evidence_dir):
+                    emergency_detector, evidence_dir, plate_reader=None,
+                    plate_locator=None):
     """Create a configured ``TrafficVideoProcessor`` for a video's size."""
 
     from app.video_processor import (
@@ -196,4 +198,6 @@ def build_processor(settings, width, height, detector, tracker,
             settings.check_collisions and settings.send_alerts
         ),
         camera_id=settings.camera_id.strip() or "CAM-01",
+        plate_reader=plate_reader if settings.read_plates else None,
+        plate_locator=plate_locator,
     )

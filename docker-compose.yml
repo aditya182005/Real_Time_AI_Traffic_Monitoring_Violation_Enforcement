@@ -1,6 +1,9 @@
 services:
   traffic-agent:
-    build: .
+    build:
+      context: .
+      args:
+        WITH_PLATES: ${WITH_PLATES:-0}     # 1 adds license-plate reading
     ports:
       - "8501:8501"
     env_file: .env          # DASHBOARD_PASSWORD, Twilio settings, CAMERA_ID

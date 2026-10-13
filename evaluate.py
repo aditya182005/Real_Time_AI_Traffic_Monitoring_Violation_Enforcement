@@ -241,6 +241,9 @@ def main(argv=None, **components):
     if args.video:
         args.input = args.video
 
+    if run_video.is_live(args.input):
+        parser.error("evaluate.py needs a video file, not a live stream.")
+
     # Evaluation must never write to the real database or open windows.
     args.no_save = True
     args.no_display = True
