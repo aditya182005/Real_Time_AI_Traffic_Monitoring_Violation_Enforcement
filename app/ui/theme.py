@@ -1,9 +1,9 @@
-"""Visual design: a night-sign control room.
+"""Visual design: a pine-and-terracotta control room.
 
-A pearl page, white working surfaces, deep navy ink and one cool teal for
-anything you can act on. Signal red / amber / green are used ONLY to mean
+A warm stone page, white working surfaces, charcoal ink and terracotta for
+anything you can act on, set against deep pine. Signal red / amber / green are used ONLY to mean
 status. The memorable element is the highway gantry sign that carries the
-headline figures. A navy sidebar holds the brand and navigation. Type is
+headline figures. A pine sidebar holds the brand and navigation. Type is
 Barlow Condensed (headings and numerals, from highway lettering) with Barlow
 for text; both fall back to system fonts when offline.
 
@@ -20,20 +20,20 @@ CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap');
 
 :root {
-    --pearl: #F1F4F8;
+    --page: #F6F2ED;
     --surface: #FFFFFF;
-    --ink: #0B1B30;
-    --ink-soft: #52627A;
-    --rule: #D8DFE8;
-    --night: #0A2447;          /* gantry sign and sidebar */
-    --night-deep: #071A35;
-    --teal: #0B7F8B;           /* things you can act on */
-    --teal-bright: #38C7D3;    /* the same, on navy */
+    --ink: #1C2426;
+    --ink-soft: #5E6A6C;
+    --rule: #E1D9D0;
+    --night: #11363B;          /* pine: gantry sign and sidebar */
+    --night-deep: #0A2427;
+    --accent: #B8481F;         /* terracotta: things you can act on */
+    --accent-bright: #F0A27F;  /* the same, on pine */
     --paint: #FFFFFF;
-    --red: #C9373D;
+    --red: #B3263A;
     --green: #1F9D63;
     --amber: #E3A008;
-    --lift: 0 1px 2px rgba(11, 27, 48, .06), 0 6px 20px rgba(11, 27, 48, .06);
+    --lift: 0 1px 2px rgba(28, 36, 38, .06), 0 6px 20px rgba(60, 40, 28, .07);
     --display: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', sans-serif;
     --text: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
@@ -55,7 +55,7 @@ CSS = """
 #MainMenu, footer { visibility: hidden; }
 header[data-testid="stHeader"] { background: transparent; }
 
-:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 /* -- page heading ------------------------------------------------------ */
 .page-head { margin: 0 0 1.7rem; }
@@ -68,17 +68,17 @@ header[data-testid="stHeader"] { background: transparent; }
     font-size: 1.1rem; line-height: 1.5; max-width: 62ch;
     color: var(--ink-soft); margin: 0;
 }
-/* The stop line: a short, heavy teal bar under the title. */
+/* The stop line: a short, heavy terracotta bar under the title. */
 .page-head::after {
     content: ""; display: block; width: 64px; height: 6px;
-    border-radius: 3px; background: var(--teal); margin-top: 1.1rem;
+    border-radius: 3px; background: var(--accent); margin-top: 1.1rem;
 }
 
 /* -- gantry sign: the headline figures -------------------------------- */
 .gantry {
     background: var(--night); border-radius: 16px; padding: 7px;
     margin: 0 0 1.5rem;
-    box-shadow: 0 2px 4px rgba(7, 26, 53, .18), 0 14px 32px rgba(7, 26, 53, .22);
+    box-shadow: 0 2px 4px rgba(10, 36, 39, .20), 0 14px 32px rgba(10, 36, 39, .24);
 }
 .gantry-inner {
     border: 2px solid rgba(255, 255, 255, .88); border-radius: 10px;
@@ -141,12 +141,12 @@ header[data-testid="stHeader"] { background: transparent; }
 }
 .tag::before {
     content: ""; width: 9px; height: 9px; border-radius: 50%;
-    background: var(--lamp, var(--teal));
+    background: var(--lamp, var(--accent));
 }
 .tag.ok     { --lamp: var(--green); }
 .tag.warn   { --lamp: var(--amber); }
 .tag.danger { --lamp: var(--red); }
-.tag.info   { --lamp: var(--teal); }
+.tag.info   { --lamp: var(--accent); }
 
 /* -- Streamlit widgets ------------------------------------------------- */
 .stButton > button, .stDownloadButton > button {
@@ -154,7 +154,7 @@ header[data-testid="stHeader"] { background: transparent; }
     transition: box-shadow .15s ease, transform .15s ease;
 }
 .stButton > button:hover, .stDownloadButton > button:hover {
-    box-shadow: 0 4px 14px rgba(11, 127, 139, .25);
+    box-shadow: 0 4px 14px rgba(184, 72, 31, .28);
 }
 .stTabs [data-baseweb="tab-list"] { gap: 6px; border-bottom: 1px solid var(--rule); }
 .stTabs [data-baseweb="tab"] {
@@ -162,7 +162,7 @@ header[data-testid="stHeader"] { background: transparent; }
 }
 div[data-testid="stFileUploader"] section,
 div[data-testid="stFileUploaderDropzone"] {
-    border: 2px dashed var(--teal); border-radius: 12px;
+    border: 2px dashed var(--accent); border-radius: 12px;
     background: var(--surface);
 }
 div[data-testid="stMetric"] {
@@ -180,7 +180,7 @@ div[data-testid="stExpander"] {
     border-radius: 12px;
 }
 
-/* -- sidebar: navy navigation ----------------------------------------- */
+/* -- sidebar: pine navigation ----------------------------------------- */
 section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, var(--night) 0%, var(--night-deep) 100%);
     border-right: 0;
@@ -193,9 +193,9 @@ section[data-testid="stSidebar"] h2,
 section[data-testid="stSidebar"] h3,
 section[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
 section[data-testid="stSidebar"] .brand span {
-    color: #E7EDF6;
+    color: #EDE8E2;
 }
-section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] { color: #9FB0C8; }
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] { color: #A9BDBF; }
 section[data-testid="stSidebar"] hr { border-color: rgba(255, 255, 255, .14); }
 /* Keep text readable inside boxes that bring their own background. */
 section[data-testid="stSidebar"] input,
@@ -212,12 +212,16 @@ section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
     background: rgba(255, 255, 255, .07);
 }
 section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
-    background: rgba(56, 199, 211, .14);
-    border-left-color: var(--teal-bright);
+    background: rgba(240, 162, 127, .16);
+    border-left-color: var(--accent-bright);
 }
 section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p {
     font-weight: 600; color: #FFFFFF;
 }
+
+/* Group headings inside the page list are added per page by nav_groups(). */
+section[data-testid="stSidebar"] div[role="radiogroup"] { padding-top: 26px; }
+section[data-testid="stSidebar"] div[role="radiogroup"] > label { position: relative; }
 
 .brand { display: flex; align-items: center; gap: 12px; margin: .2rem 0 .1rem; }
 .brand span {
@@ -236,9 +240,9 @@ section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checke
 SIGNAL_HEAD = (
     '<svg width="26" height="40" viewBox="0 0 26 40" role="img" '
     'aria-label="Traffic signal">'
-    '<rect x="1" y="1" width="24" height="38" rx="6" fill="#0B1B30" stroke="#5F7595" stroke-width="1.2"/>'
-    '<circle cx="13" cy="9" r="4.5" fill="#C9373D"/>'
-    '<circle cx="13" cy="20" r="4.5" fill="#33465F"/>'
+    '<rect x="1" y="1" width="24" height="38" rx="6" fill="#1C2426" stroke="#7E9A9D" stroke-width="1.2"/>'
+    '<circle cx="13" cy="9" r="4.5" fill="#B3263A"/>'
+    '<circle cx="13" cy="20" r="4.5" fill="#3A4C4F"/>'
     '<circle cx="13" cy="31" r="4.5" fill="#1F9D63"/>'
     '</svg>'
 )
@@ -306,3 +310,34 @@ def card(title, body_html):
         f'<div class="panel"><h4>{html.escape(title)}</h4>{body_html}</div>',
         unsafe_allow_html=True,
     )
+
+
+def nav_groups(starts):
+    """Headings for the sidebar page list.
+
+    ``starts`` maps a page's position in the list (0 is the first) to the
+    heading that begins a group there. Streamlit draws the list as one
+    radio group, so each heading is a CSS label above the first page of the
+    group; the page names themselves do not change. The first heading has
+    no gap above it, so it sits on the top edge of the list.
+    """
+
+    rules = []
+
+    for position, heading in starts.items():
+        safe = html.escape(str(heading)).replace("\\", "").replace('"', "")
+        gap = "0" if position == 0 else "34px"
+        selector = (
+            'section[data-testid="stSidebar"] div[role="radiogroup"] > '
+            f'label:nth-child({int(position) + 1})'
+        )
+        # The heading is drawn above the row, outside its highlight.
+        rules.append(f"{selector} {{ margin-top: {gap}; }}")
+        rules.append(
+            f'{selector}::before {{ content: "{safe}"; position: absolute;'
+            ' top: -24px; left: 2px; font-size: .78rem; font-weight: 600;'
+            ' letter-spacing: .06em; color: #A9BDBF; }'
+        )
+
+    st.markdown("<style>" + " ".join(rules) + "</style>",
+                unsafe_allow_html=True)

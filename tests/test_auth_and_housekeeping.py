@@ -42,7 +42,8 @@ class MainIsGatedTests(unittest.TestCase):
     def test_signed_in_user_reaches_the_app(self):
         st = self.run_main({"DASHBOARD_PASSWORD": "s3cret"},
                            state={"user": {"name": "shared", "role": "operator"},
-                                  "authenticated": True})
+                                  "authenticated": True},
+                           values={"Go to": "Analyze footage"})
 
         self.assertIn("Upload traffic photos", st.text())
 

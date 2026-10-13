@@ -43,17 +43,29 @@ try:
 except OSError:
     pass  # cleaning up is best effort; never block the app on it
 
-PAGES = {
-    "Analyze footage": "upload",
-    "Live camera": "live",
-    "Dashboard": "dashboard",
-    "Evidence": "evidence",
-    "Alerts": "alerts",
-    "About": "about",
-}
+# Pages grouped by what the person is doing, in the order they are listed.
+NAV = (
+    ("Overview", {"Dashboard": "dashboard"}),
+    ("Monitor", {"Analyze footage": "upload", "Live camera": "live"}),
+    ("Review", {"Evidence": "evidence", "Alerts": "alerts"}),
+    ("System", {"About": "about", "Admin": "admin"}),
+)
 
-if auth.can("admin"):
-    PAGES["Admin"] = "admin"
+PAGES = {}
+GROUP_STARTS = {}     # position in PAGES -> group heading
+
+for heading, members in NAV:
+    first = True
+
+    for label, key in members.items():
+        if key == "admin" and not auth.can("admin"):
+            continue
+
+        if first:
+            GROUP_STARTS[len(PAGES)] = heading
+            first = False
+
+        PAGES[label] = key
 
 # Pages that read the database and so need a date range.
 DATA_PAGES = ("dashboard", "evidence", "alerts")
@@ -62,7 +74,14 @@ with st.sidebar:
     theme.brand()
     st.caption("Smart traffic monitoring")
 
-    choice = st.radio("Go to", list(PAGES), label_visibility="collapsed")
+    theme.nav_groups(GROUP_STARTS)
+
+    # First visit with nothing recorded yet: start where the data comes from.
+    labels = list(PAGES)
+    first_page = 0 if DB_PATH.exists() else labels.index("Analyze footage")
+
+    choice = st.radio("Go to", labels, index=first_page,
+                      label_visibility="collapsed")
     page = PAGES[choice]
 
     start_date = date.today() - timedelta(days=30)
