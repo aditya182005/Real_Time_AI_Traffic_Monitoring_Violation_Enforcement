@@ -1,10 +1,10 @@
 [theme]
-# Light "concrete and road sign" palette; custom pieces are in app/ui/theme.py.
+# Night-sign control room: pearl page, navy and teal. Custom pieces: app/ui/theme.py.
 base = "light"
-primaryColor = "#0F4C9A"
-backgroundColor = "#E8EAEC"
-secondaryBackgroundColor = "#DCE0E4"
-textColor = "#14202B"
+primaryColor = "#0B7F8B"
+backgroundColor = "#F1F4F8"
+secondaryBackgroundColor = "#E4EAF2"
+textColor = "#0B1B30"
 font = "sans serif"
 
 [server]
