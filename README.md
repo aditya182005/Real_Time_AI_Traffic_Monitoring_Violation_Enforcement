@@ -302,6 +302,14 @@ Add the dashboard screenshot when the dashboard UI is further developed:
 
 ## ▶️ How to Run
 
+### Quick start (every time)
+
+First time only: `setup.bat` (Windows) or `./setup.sh` (macOS/Linux). It
+creates the virtual environment, installs the requirements and creates your
+`.env`. After that, start the dashboard with `start.bat` or `./start.sh`.
+If a file such as `requirements-plates.txt` is "not found", your copy is out
+of date: run `git checkout main` and `git pull`.
+
 ### 1. Clone the repository
 
 ```bash
