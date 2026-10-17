@@ -297,7 +297,7 @@ def smoke_test(root=ROOT, detector=None, tracker=None, emergency=None):
     except Exception as exc:
         checks.append(Check(
             FAIL, "Vehicle tracking", f"{type(exc).__name__}: {exc}",
-            "pip install --upgrade supervision",
+            'pip install "supervision>=0.20,<0.31"',
         ))
     else:
         checks.append(Check(
