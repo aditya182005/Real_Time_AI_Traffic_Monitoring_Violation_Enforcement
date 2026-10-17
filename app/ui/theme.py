@@ -223,6 +223,14 @@ section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checke
 section[data-testid="stSidebar"] div[role="radiogroup"] { padding-top: 26px; }
 section[data-testid="stSidebar"] div[role="radiogroup"] > label { position: relative; }
 
+/* Date pickers: always black text, in the sidebar and on the page. */
+div[data-testid="stDateInput"] input,
+section[data-testid="stSidebar"] div[data-testid="stDateInput"] input,
+section[data-testid="stSidebar"] div[data-testid="stDateInput"] div {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+}
+
 .brand { display: flex; align-items: center; gap: 12px; margin: .2rem 0 .1rem; }
 .brand span {
     font-family: var(--display); font-weight: 700; font-size: 1.9rem;
