@@ -109,11 +109,14 @@ class StaticPageTests(PageTestCase):
             if name == "markdown" and a and "g-row" in a[0]
         )
 
-        for label, value in (("Violations", 4), ("Red light", 2),
-                             ("Speeding", 1), ("Wrong way", 1),
-                             ("Cameras and files", 2)):
+        for label, value in (("Violations", 4), ("Possible collisions", 0)):
             self.assertRegex(
                 html, rf"<b>{label}</b>.*?g-value\">{value}<", label)
+
+        metrics = {c[1][0]: c[1][1] for c in self.st.called("metric")}
+        self.assertEqual(metrics["Red light"], 2)
+        self.assertEqual(metrics["Speeding"], 1)
+        self.assertEqual(metrics["Wrong way"], 1)
 
         self.assertIn("₹4,100", html)
         self.assertIn("Wrong way", self.st.text())
@@ -195,7 +198,7 @@ class UploadFlowTests(PageTestCase):
     def upload_module(self):
         upload = self.ui("upload")
         upload.UPLOAD_ROOT = self.dir / "uploads"
-        upload.STAGING_DIR = upload.UPLOAD_ROOT / "_staging"
+        upload.STAGING_ROOT = upload.UPLOAD_ROOT / "_staging"
         upload.load_vehicle_detector = lambda: FakeVehicleDetector()
         upload.EmergencyDetector.available = staticmethod(lambda *a: False)
 
@@ -352,7 +355,7 @@ class UploadFlowTests(PageTestCase):
         upload.render()
 
         staged = self.st.session_state["staged_video"]
-        self.assertEqual(Path(staged["path"]).parent, upload.STAGING_DIR)
+        self.assertEqual(Path(staged["path"]).parent.parent, upload.STAGING_ROOT)
         self.assertEqual(Path(staged["path"]).name, "input.mp4")
         self.assertNotIn("/", staged["name"])
 

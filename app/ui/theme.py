@@ -148,6 +148,11 @@ header[data-testid="stHeader"] { background: transparent; }
 .tag.danger { --lamp: var(--red); }
 .tag.info   { --lamp: var(--accent); }
 
+/* -- attention list ---------------------------------------------------- */
+.attn { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.attn-row { display: flex; align-items: flex-start; gap: 10px; line-height: 1.45; }
+.attn-row .tag { margin: 0; flex: none; }
+
 /* -- Streamlit widgets ------------------------------------------------- */
 .stButton > button, .stDownloadButton > button {
     border-radius: 8px; font-weight: 600;
@@ -341,3 +346,16 @@ def nav_groups(starts):
 
     st.markdown("<style>" + " ".join(rules) + "</style>",
                 unsafe_allow_html=True)
+
+
+def attention(items, title="Needs attention"):
+    """A panel of ``(kind, text)`` rows: what a person should look at."""
+
+    rows = "".join(
+        '<div class="attn-row">'
+        f'{pill({"danger": "Failed", "warn": "Check", "info": "Note", "ok": "All clear"}.get(kind, "Note"), kind)}'
+        f'<span>{html.escape(str(text))}</span></div>'
+        for kind, text in items
+    )
+
+    card(title, f'<div class="attn">{rows}</div>')
