@@ -156,3 +156,133 @@ def latest_row(df):
         return None
 
     return df.loc[timestamps.idxmax()]
+
+
+# -- overview helpers ---------------------------------------------------------
+
+EVENT_NAMES = {
+    "red_light": "Red light",
+    "speeding": "Speeding",
+    "wrong_way": "Wrong way",
+}
+
+
+def _where(row):
+    for column in ("camera_id", "source"):
+        value = row.get(column)
+
+        if isinstance(value, str) and value:
+            return value
+
+    return ""
+
+
+def recent_events(data, limit=10):
+    """The newest events from every table, as one list for the overview.
+
+    Columns: When (UTC), Event, Detail, Where. Newest first.
+    """
+
+    rows = []
+
+    violations = data.get("violations")
+
+    if violations is not None and not violations.empty:
+        for _, row in violations.iterrows():
+            kind = str(row.get("violation_type", ""))
+            detail = []
+
+            speed = pd.to_numeric(row.get("measured_speed"), errors="coerce")
+
+            if kind == "speeding" and pd.notna(speed):
+                detail.append(f"{speed:.0f} km/h")
+
+            plate = row.get("plate_text")
+
+            if isinstance(plate, str) and plate:
+                detail.append(f"plate {plate}")
+
+            detail.append(f"track {row.get('track_id', '?')}")
+            rows.append((row.get("timestamp"),
+                         EVENT_NAMES.get(kind, kind or "Violation"),
+                         ", ".join(detail), _where(row)))
+
+    collisions = data.get("collisions")
+
+    if collisions is not None and not collisions.empty:
+        for _, row in collisions.iterrows():
+            status = str(row.get("alert_status") or "pending").split(":")[0]
+            rows.append((
+                row.get("timestamp"), "Possible collision",
+                f"tracks {row.get('track_id_1', '?')} and "
+                f"{row.get('track_id_2', '?')}, alert {status}",
+                _where(row)))
+
+    priority = data.get("priority")
+
+    if priority is not None and not priority.empty:
+        for _, row in priority.iterrows():
+            rows.append((
+                row.get("timestamp"), "Emergency vehicle",
+                f"{row.get('vehicle_class', 'vehicle')}, confidence "
+                f"{pd.to_numeric(row.get('confidence'), errors='coerce'):.2f}",
+                _where(row)))
+
+    table = pd.DataFrame(rows, columns=["When (UTC)", "Event", "Detail",
+                                        "Where"])
+
+    if table.empty:
+        return table
+
+    stamps = pd.to_datetime(table["When (UTC)"], errors="coerce", utc=True)
+    table = table.assign(_t=stamps).sort_values("_t", ascending=False)
+    table["When (UTC)"] = table["_t"].dt.strftime("%d %b %H:%M")
+
+    return table.drop(columns="_t").head(limit).reset_index(drop=True)
+
+
+def attention_items(data, twilio_configured):
+    """What a person should look at, as ``(kind, text)`` pairs.
+
+    ``kind`` is a pill style: danger, warn, info or ok.
+    """
+
+    items = []
+    collisions = data.get("collisions", pd.DataFrame())
+    counts = alert_status_counts(collisions)
+
+    if counts["failed"]:
+        items.append(("danger", f"{counts['failed']} collision alert(s) "
+                      "failed to send. Check the Twilio settings on the "
+                      "Alerts page."))
+
+    if len(collisions):
+        items.append(("warn", f"{len(collisions)} possible collision(s) "
+                      "need a person to verify the evidence."))
+
+        if not twilio_configured:
+            items.append(("info", "Twilio is not set up, so collision "
+                          "alerts are skipped."))
+
+    everything = [data.get(key) for key in
+                  ("violations", "collisions", "priority", "density")]
+
+    if all(df is None or df.empty for df in everything):
+        items.append(("info", "No records in this period. Analyze footage "
+                      "or widen the date range."))
+
+    return items or [("ok", "Nothing needs attention in this period.")]
+
+
+def peak_hour(density_df):
+    """``(hour, average vehicles)`` of the busiest hour, or None."""
+
+    table = density_by_hour(density_df)
+    best = table["Avg vehicles in view"].max()
+
+    if not best or pd.isna(best):
+        return None
+
+    hour = int(table.loc[table["Avg vehicles in view"].idxmax(), "Hour (UTC)"])
+
+    return hour, float(best)
