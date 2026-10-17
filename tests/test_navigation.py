@@ -34,3 +34,19 @@ class NavGroupTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DateInputColourTests(unittest.TestCase):
+
+    def test_date_text_is_black_even_in_the_sidebar(self):
+        stub = FakeStreamlit()
+        self.addCleanup(install(stub))
+        theme = importlib.import_module("app.ui.theme")
+
+        start = theme.CSS.index('/* Date pickers')
+        rule = theme.CSS[start:theme.CSS.index("}", start)]
+
+        self.assertIn("color: #000000 !important", rule)
+        self.assertIn("-webkit-text-fill-color: #000000 !important", rule)
+        self.assertIn('section[data-testid="stSidebar"] div[data-testid="stDateInput"]',
+                      theme.CSS)
