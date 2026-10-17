@@ -39,3 +39,43 @@ class VehicleTrackerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MissingByteTrackTests(unittest.TestCase):
+    """supervision 0.31 removed ByteTrack; the failure must be understandable."""
+
+    def test_clear_error_when_byte_track_is_missing(self):
+        import importlib
+        import sys
+        import types
+
+        stub = types.SimpleNamespace(Detections=object)
+        previous = sys.modules.get("supervision")
+        sys.modules["supervision"] = stub
+        sys.modules.pop("app.tracking.tracker", None)
+
+        try:
+            module = importlib.import_module("app.tracking.tracker")
+
+            with self.assertRaisesRegex(RuntimeError, r"<0\.31"):
+                module.VehicleTracker()
+        finally:
+            sys.modules.pop("app.tracking.tracker", None)
+
+            if previous is None:
+                sys.modules.pop("supervision", None)
+            else:
+                sys.modules["supervision"] = previous
+
+
+class RequirementsPinTests(unittest.TestCase):
+
+    def test_supervision_is_pinned_below_the_release_without_byte_track(self):
+        from pathlib import Path
+
+        text = (Path(__file__).resolve().parents[1]
+                / "requirements.txt").read_text()
+        line = next(l for l in text.splitlines()
+                    if l.startswith("supervision"))
+
+        self.assertIn("<0.31", line)
