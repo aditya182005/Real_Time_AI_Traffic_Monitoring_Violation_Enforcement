@@ -12,6 +12,7 @@ models/emergency_vehicle.pt, which is what the app and check_setup.py use.
 """
 
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -87,6 +88,15 @@ def _ultralytics_trainer(base, **options):
     return Path(model.trainer.save_dir)
 
 
+def has_split(data_yaml, split):
+    """True when the dataset has images for ``split`` (for example test)."""
+
+    folder = Path(data_yaml).parent / "images" / split
+
+    return folder.is_dir() and any(
+        f.suffix.lower() in IMAGE_TYPES for f in folder.iterdir())
+
+
 def _ultralytics_evaluator(weights, data, split="val"):
     """Score finished weights on a dataset split.
 
@@ -98,15 +108,29 @@ def _ultralytics_evaluator(weights, data, split="val"):
     metrics = YOLO(str(weights)).val(data=str(data), split=split,
                                      verbose=False).box
 
-    return {
+    scores = {
         "precision": float(metrics.mp),
         "recall": float(metrics.mr),
         "mAP50": float(metrics.map50),
         "mAP50-95": float(metrics.map),
     }
 
+    names = getattr(metrics, "names", None) or {}
+    per_class = {}
 
-def describe_quality(scores):
+    for index, class_index in enumerate(getattr(metrics, "ap_class_index", [])):
+        per_class[str(names.get(int(class_index), class_index))] = {
+            "mAP50": float(metrics.ap50[index]),
+            "mAP50-95": float(metrics.ap[index]),
+        }
+
+    if per_class:
+        scores["per_class"] = per_class
+
+    return scores
+
+
+def describe_quality(scores, split="validation"):
     """A plain-language reading of the validation scores."""
 
     map50 = scores["mAP50"]
@@ -120,7 +144,7 @@ def describe_quality(scores):
                    "relying on it")
 
     return (f"mAP@0.5 {map50:.2f}, precision {scores['precision']:.2f}, "
-            f"recall {scores['recall']:.2f} on the validation images: "
+            f"recall {scores['recall']:.2f} on the {split} images: "
             f"{verdict}.")
 
 
@@ -140,6 +164,14 @@ def build_parser():
     parser.add_argument("--name", default="emergency_vehicle")
     parser.add_argument("--output", default=str(INSTALLED_WEIGHTS),
                         help="where the finished weights are installed")
+    parser.add_argument("--time", type=float, default=None,
+                        help="stop training after this many hours (overrides "
+                             "--epochs; handy on slow machines and in CI)")
+    parser.add_argument("--patience", type=int, default=15,
+                        help="stop early after this many epochs without "
+                             "improvement")
+    parser.add_argument("--report", default=None,
+                        help="write the scores to this JSON file")
     parser.add_argument("--no-evaluate", action="store_true",
                         help="skip scoring the weights on the validation "
                              "images after training")
@@ -171,7 +203,11 @@ def main(argv=None, trainer=_ultralytics_trainer,
         project=str(ROOT / "runs" / "detect"),
         name=args.name,
         exist_ok=True,
+        patience=args.patience,
     )
+
+    if args.time is not None:
+        options["time"] = args.time
 
     if args.device is not None:
         options["device"] = args.device
@@ -193,11 +229,30 @@ def main(argv=None, trainer=_ultralytics_trainer,
     print(f"\nTraining completed. Weights installed at {installed}")
 
     if not args.no_evaluate:
-        try:
-            print(describe_quality(evaluator(installed, args.data)))
-        except Exception as exc:  # scoring is a bonus; the weights are safe
-            print(f"Could not score the weights ({type(exc).__name__}: "
-                  f"{exc}). They are installed anyway.")
+        report = {}
+        splits = [("val", "validation")]
+
+        if has_split(args.data, "test"):
+            splits.append(("test", "test"))
+
+        for split, label in splits:
+            try:
+                scores = evaluator(installed, args.data, split=split)
+            except Exception as exc:  # scoring is a bonus; weights are safe
+                print(f"Could not score the weights on {label} "
+                      f"({type(exc).__name__}: {exc}). They are installed "
+                      "anyway.")
+                continue
+
+            report[split] = scores
+            print(describe_quality(scores, label))
+
+            for name, values in scores.get("per_class", {}).items():
+                print(f"    {name}: mAP@0.5 {values['mAP50']:.2f}")
+
+        if args.report and report:
+            Path(args.report).write_text(json.dumps(report, indent=2))
+            print(f"Scores written to {args.report}")
 
     print("Check it with: python check_setup.py --full")
 
