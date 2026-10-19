@@ -105,8 +105,8 @@ def _ultralytics_evaluator(weights, data, split="val"):
 
     from ultralytics import YOLO
 
-    metrics = YOLO(str(weights)).val(data=str(data), split=split,
-                                     verbose=False).box
+    model = YOLO(str(weights))
+    metrics = model.val(data=str(data), split=split, verbose=False).box
 
     scores = {
         "precision": float(metrics.mp),
@@ -115,7 +115,7 @@ def _ultralytics_evaluator(weights, data, split="val"):
         "mAP50-95": float(metrics.map),
     }
 
-    names = getattr(metrics, "names", None) or {}
+    names = getattr(model, "names", None) or {}
     per_class = {}
 
     for index, class_index in enumerate(getattr(metrics, "ap_class_index", [])):
