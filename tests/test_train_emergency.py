@@ -296,3 +296,25 @@ class NotebookTests(unittest.TestCase):
         # Every option the notebook passes must exist in the script.
         parser = te.build_parser()
         parser.parse_args(["--epochs", "60", "--device", "0", "--batch", "-1"])
+
+
+    def test_the_new_data_notebook_uses_real_scripts_and_options(self):
+        import json
+        import build_emergency_dataset as bd
+
+        path = Path(te.__file__).parent / "notebooks" / \
+            "train_emergency_colab_new_data.ipynb"
+        notebook = json.loads(path.read_text())
+        source = "\n".join("".join(c["source"]) for c in notebook["cells"])
+
+        self.assertIn("python build_emergency_dataset.py", source)
+        self.assertIn("python train_emergency.py --data", source)
+        self.assertIn('supervision>=0.20,<0.31', source)
+
+        te.build_parser().parse_args(
+            ["--data", "x.yaml", "--epochs", "80", "--device", "0",
+             "--batch", "-1", "--report", "emergency_scores.json"])
+        bd.build_parser().parse_args(["--source", "a", "--source", "b:fire_truck"])
+
+        # The forced class the notebook uses must be one the script knows.
+        self.assertIn("fire_truck", bd.CLASSES)
