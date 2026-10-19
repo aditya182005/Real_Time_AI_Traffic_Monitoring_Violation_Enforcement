@@ -45,6 +45,13 @@ class NameTests(unittest.TestCase):
             b = Path(tmp) / "b.yaml"
             b.write_text("names:\n  0: x\n  1: y\n")
 
+            c = Path(tmp) / "c.yaml"
+            c.write_text("train: a\nnames:\n- x\n- y\nnc: 2\n")
+            d = Path(tmp) / "d.yaml"
+            d.write_text("names:\n  - x\n  - y\nroboflow:\n  a: b\n")
+
+            self.assertEqual(bd.read_names(c), ["x", "y"])
+            self.assertEqual(bd.read_names(d), ["x", "y"])
             self.assertEqual(bd.read_names(a), ["x", "y z"])
             self.assertEqual(bd.read_names(b), ["x", "y"])
 
@@ -104,6 +111,19 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(total, 2)            # neg + pos
             self.assertEqual(negatives, 1)
             self.assertEqual(report["sources"]["s0"]["dropped_unsure"], 2)
+
+    def test_a_broken_source_is_skipped_not_fatal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            good = make_source(tmp, "a", ["ambulance"], {"x": [f"0 {BOX}"]})
+            bad = Path(tmp) / "bad"
+            bad.mkdir()
+            (bad / "data.yaml").write_text("nothing: here\n")
+
+            _, report = self.build(tmp, [good, bad])
+
+            self.assertIn("error", report["sources"]["s1"])
+            self.assertEqual(
+                sum(s["images"] for s in report["splits"].values()), 1)
 
     def test_duplicates_across_sources_are_removed(self):
         with tempfile.TemporaryDirectory() as tmp:

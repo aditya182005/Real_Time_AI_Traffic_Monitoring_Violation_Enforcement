@@ -66,24 +66,44 @@ def class_for_name(name):
 
 
 def read_names(data_yaml):
-    """Class names from a data.yaml, without needing PyYAML."""
+    """Class names from a data.yaml (inline list, ``- item`` list, or
+    ``0: name`` mapping, indented or not)."""
 
     text = Path(data_yaml).read_text(encoding="utf-8")
+
+    try:
+        import yaml
+
+        names = yaml.safe_load(text).get("names")
+
+        if isinstance(names, dict):
+            return [str(names[k]) for k in sorted(names, key=int)]
+
+        if isinstance(names, list):
+            return [str(n) for n in names]
+    except Exception:  # PyYAML missing or odd file: use the plain parser
+        pass
+
     inline = re.search(r"^names:\s*\[(.*?)\]", text, re.M | re.S)
 
     if inline:
         return [n.strip().strip("'\"") for n in inline.group(1).split(",")
                 if n.strip()]
 
-    block = re.search(r"^names:\s*\n((?:[ \t]+.*\n?)+)", text, re.M)
+    start = re.search(r"^names:\s*$", text, re.M)
 
-    if not block:
+    if not start:
         raise ValueError(f"No class names found in {data_yaml}")
 
-    pairs = {}
-    listed = []
+    pairs, listed = {}, []
 
-    for line in block.group(1).splitlines():
+    for line in text[start.end():].splitlines():
+        if not line.strip():
+            continue
+
+        if not line[0].isspace() and not line.startswith("- "):
+            break  # the next top-level key
+
         line = line.strip()
 
         if line.startswith("- "):
@@ -95,7 +115,10 @@ def read_names(data_yaml):
     if listed:
         return listed
 
-    return [pairs[i] for i in sorted(pairs)]
+    if pairs:
+        return [pairs[i] for i in sorted(pairs)]
+
+    raise ValueError(f"No class names found in {data_yaml}")
 
 
 def to_box(values):
@@ -228,7 +251,11 @@ def build(sources, output, seed=0, val=0.1, test=0.1, include=None):
         tag = f"s{number}"
         stats[tag]["folder"] = str(folder)
 
-        items.extend(load_source(folder, forced, tag, stats))
+        try:
+            items.extend(load_source(folder, forced, tag, stats))
+        except (OSError, ValueError) as exc:
+            stats[tag]["error"] = f"{type(exc).__name__}: {exc}"
+            print(f"SKIPPED source {folder}: {exc}")
 
     if include:
         existing = Path(include)
@@ -256,6 +283,11 @@ def build(sources, output, seed=0, val=0.1, test=0.1, include=None):
                                      [float(v) for v in parts[1:]]))
 
                 items.append((f"{tag}/{photo_key(image.stem)}", image, rows))
+
+    if not items:
+        raise ValueError(
+            "no usable images in any source (see the SKIPPED / dropped lines "
+            "above)")
 
     # Remove exact duplicates (the same file in two sources).
     seen, unique, duplicates = set(), [], 0
@@ -355,6 +387,9 @@ def print_report(report):
 
         for name, mapped in info.get("classes", {}).items():
             print(f"    {name!r:28} -> {mapped}")
+
+        if info.get("error"):
+            print(f"    FAILED: {info['error']}")
 
         print(f"    dropped (unsure): {info['dropped_unsure']}, "
               f"bad rows: {info['bad_rows']}")
