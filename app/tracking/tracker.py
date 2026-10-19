@@ -5,6 +5,14 @@ import supervision as sv
 class VehicleTracker:
 
     def __init__(self):
+        if not hasattr(sv, "ByteTrack"):
+            # supervision 0.31 removed ByteTrack (it moved to the separate
+            # `trackers` package).
+            raise RuntimeError(
+                "This version of supervision no longer includes ByteTrack. "
+                'Install a compatible one: pip install "supervision>=0.20,<0.31"'
+            )
+
         self.tracker = sv.ByteTrack()
 
     def update(self, detections):
