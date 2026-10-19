@@ -24,7 +24,7 @@ from app.ui.data import ROOT
 from app.ui.helpers import csv_bytes, show_df, show_image
 
 UPLOAD_ROOT = paths.OUTPUT_DIR / "uploads"
-STAGING_DIR = UPLOAD_ROOT / "_staging"
+STAGING_ROOT = UPLOAD_ROOT / "_staging"
 SAMPLE_VIDEO = ROOT / "data" / "videos" / "traffic.mp4"
 MAX_IMAGES = 12
 
@@ -276,6 +276,18 @@ def _read_properties(path):
     }
 
 
+def _staging_dir():
+    """This browser session's own staging folder.
+
+    A shared folder would let two people uploading at once overwrite each
+    other's video. Old folders are removed by housekeeping.
+    """
+
+    session = st.session_state.setdefault("staging_id", uuid.uuid4().hex[:12])
+
+    return STAGING_ROOT / session
+
+
 def _stage_video(uploaded):
     """Save the upload to a fixed, safe location and read its properties."""
 
@@ -291,11 +303,12 @@ def _stage_video(uploaded):
         st.error("That file type is not supported. Use MP4, AVI, MOV or MKV.")
         return None
 
-    shutil.rmtree(STAGING_DIR, ignore_errors=True)
-    STAGING_DIR.mkdir(parents=True, exist_ok=True)
+    folder = _staging_dir()
+    shutil.rmtree(folder, ignore_errors=True)
+    folder.mkdir(parents=True, exist_ok=True)
 
     # The user's file name is never used on disk, only its extension.
-    path = STAGING_DIR / f"input{suffix}"
+    path = folder / f"input{suffix}"
     path.write_bytes(uploaded.getbuffer())
 
     properties = _read_properties(path)

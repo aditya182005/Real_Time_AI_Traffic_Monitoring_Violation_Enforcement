@@ -167,6 +167,7 @@ class FakeStreamlit(types.ModuleType):
         return self._value(key, value)
 
     def date_input(self, label, value=None, key=None, **kwargs):
+        self.calls.append(("date_input", (label,), {"key": key}))
         return self._value(key, value)
 
     def multiselect(self, label, options=(), default=None, key=None, **kw):

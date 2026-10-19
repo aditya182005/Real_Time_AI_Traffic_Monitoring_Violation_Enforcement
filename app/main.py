@@ -1,5 +1,4 @@
 import sys
-from datetime import date, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,7 +10,7 @@ if str(ROOT) not in sys.path:
 import streamlit as st  # noqa: E402
 
 from app.ui import about, admin, alerts, analytics, dashboard  # noqa: E402
-from app.ui import auth, evidence, live_page, theme, upload  # noqa: E402
+from app.ui import auth, evidence, filters, live_page, theme, upload  # noqa: E402
 from app.ui.data import DB_PATH, load_all  # noqa: E402
 
 st.set_page_config(
@@ -33,8 +32,11 @@ def _housekeeping():
 
     from app import housekeeping, paths
 
+    uploads = paths.OUTPUT_DIR / "uploads"
+    housekeeping.cleanup_staging(uploads)
+
     return housekeeping.cleanup_old_runs(
-        paths.OUTPUT_DIR / "uploads", housekeeping.retention_days()
+        uploads, housekeeping.retention_days()
     )
 
 
@@ -84,19 +86,6 @@ with st.sidebar:
                       label_visibility="collapsed")
     page = PAGES[choice]
 
-    start_date = date.today() - timedelta(days=30)
-    end_date = date.today()
-
-    if page in DATA_PAGES:
-        st.divider()
-        st.markdown("**Date range**")
-        start_date = st.date_input("From", value=start_date, key="start_date")
-        end_date = st.date_input("To", value=end_date, key="end_date")
-
-        if st.button("Refresh data"):
-            st.cache_data.clear()
-            st.rerun()
-
     auth.logout_button()
 
     st.divider()
@@ -105,9 +94,14 @@ with st.sidebar:
         f"({'found' if DB_PATH.exists() else 'not created yet'})"
     )
 
-if start_date > end_date:
-    st.sidebar.error("The start date is after the end date.")
-    st.stop()
+start_date = end_date = None
+
+if page in DATA_PAGES:
+    start_date, end_date = filters.date_range_bar()
+
+    if start_date > end_date:
+        st.error("The start date is after the end date.")
+        st.stop()
 
 if page == "upload":
     upload.render()

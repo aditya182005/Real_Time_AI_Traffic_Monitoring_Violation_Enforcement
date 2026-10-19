@@ -412,13 +412,18 @@ Run everything from the project root so relative paths resolve.
 streamlit run app/main.py
 ```
 
-Pages (sidebar):
+Pages (sidebar, grouped by what you are doing):
 
-* **Analyze footage** — upload photos or a video, place the lines, run the
-  checks. Use **Try the sample video** to see it work with the bundled clip.
-* **Dashboard** — KPIs, violations per hour, traffic density, filterable records.
-* **Evidence** — annotated frames and vehicle crops for each event.
-* **Alerts** — collision alerts, Twilio status and a test-message button.
+* **Overview → Dashboard** — a date bar (last 7 / 30 / 90 days, all time or
+  custom) above four tabs: *Overview* (headline figures, a "Needs attention"
+  list, charts, latest activity), *Violations*, *Traffic* and *Alerts and
+  priority*.
+* **Monitor → Analyze footage** — upload photos or a video, place the lines,
+  run the checks. Use **Try the sample video** to see it work with the
+  bundled clip. **Live camera** analyzes an RTSP / webcam stream.
+* **Review → Evidence, Alerts** — annotated frames and crops; Twilio status
+  and a test-message button.
+* **System → About** (and **Admin** for admins).
 
 For in-browser playback of the annotated video the app converts it to H.264
 with **ffmpeg** (installed with `pip install -r requirements.txt` through
