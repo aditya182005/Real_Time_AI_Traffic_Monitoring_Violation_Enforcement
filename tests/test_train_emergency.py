@@ -1,5 +1,6 @@
 import contextlib
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -200,7 +201,7 @@ class EvaluationTests(unittest.TestCase):
         return code, installed, out.getvalue()
 
     def test_scores_are_printed_in_plain_words(self):
-        code, _, out = self.run_with(lambda weights, data: self.SCORES)
+        code, _, out = self.run_with(lambda weights, data, split='val': self.SCORES)
 
         self.assertEqual(code, 0)
         self.assertIn("mAP@0.5 0.91", out)
@@ -213,7 +214,7 @@ class EvaluationTests(unittest.TestCase):
             self.assertIn(word, text)
 
     def test_a_failing_evaluation_does_not_lose_the_weights(self):
-        def broken(weights, data):
+        def broken(weights, data, split='val'):
             raise RuntimeError("val exploded")
 
         code, installed, out = self.run_with(broken)
@@ -226,10 +227,56 @@ class EvaluationTests(unittest.TestCase):
         called = []
 
         code, _, out = self.run_with(
-            lambda w, d: called.append(1) or self.SCORES, "--no-evaluate")
+            lambda w, d, split='val': called.append(1) or self.SCORES, "--no-evaluate")
 
         self.assertEqual((code, called), (0, []))
         self.assertNotIn("mAP", out)
+
+
+    def test_test_split_is_scored_when_the_dataset_has_one(self):
+        splits = []
+
+        with tempfile.TemporaryDirectory() as root:
+            data = make_dataset(root)
+            test_dir = data.parent / "images" / "test"
+            test_dir.mkdir(parents=True)
+            (test_dir / "a.jpg").write_bytes(b"x")
+            report = Path(root) / "report.json"
+
+            def evaluator(weights, data, split="val"):
+                splits.append(split)
+                return {**self.SCORES, "per_class": {"ambulance": {
+                    "mAP50": 0.9, "mAP50-95": 0.7}}}
+
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                te.main(["--data", str(data), "--output",
+                         str(Path(root) / "m.pt"), "--report", str(report)],
+                        trainer=lambda base, **o: make_run(root),
+                        evaluator=evaluator)
+
+            saved = json.loads(report.read_text())
+
+        self.assertEqual(splits, ["val", "test"])
+        self.assertEqual(set(saved), {"val", "test"})
+        self.assertIn("test images", out.getvalue())
+        self.assertIn("ambulance: mAP@0.5 0.90", out.getvalue())
+
+    def test_time_cap_is_passed_to_training(self):
+        seen = {}
+
+        def trainer(base, **options):
+            seen.update(options)
+            return make_run(root)
+
+        with tempfile.TemporaryDirectory() as root:
+            data = make_dataset(root)
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                te.main(["--data", str(data), "--output",
+                         str(Path(root) / "m.pt"), "--time", "4.5",
+                         "--no-evaluate"], trainer=trainer)
+
+        self.assertEqual(seen["time"], 4.5)
 
 
 class NotebookTests(unittest.TestCase):
@@ -249,3 +296,25 @@ class NotebookTests(unittest.TestCase):
         # Every option the notebook passes must exist in the script.
         parser = te.build_parser()
         parser.parse_args(["--epochs", "60", "--device", "0", "--batch", "-1"])
+
+
+    def test_the_new_data_notebook_uses_real_scripts_and_options(self):
+        import json
+        import build_emergency_dataset as bd
+
+        path = Path(te.__file__).parent / "notebooks" / \
+            "train_emergency_colab_new_data.ipynb"
+        notebook = json.loads(path.read_text())
+        source = "\n".join("".join(c["source"]) for c in notebook["cells"])
+
+        self.assertIn("python build_emergency_dataset.py", source)
+        self.assertIn("python train_emergency.py --data", source)
+        self.assertIn('supervision>=0.20,<0.31', source)
+
+        te.build_parser().parse_args(
+            ["--data", "x.yaml", "--epochs", "80", "--device", "0",
+             "--batch", "-1", "--report", "emergency_scores.json"])
+        bd.build_parser().parse_args(["--source", "a", "--source", "b:fire_truck"])
+
+        # The forced class the notebook uses must be one the script knows.
+        self.assertIn("fire_truck", bd.CLASSES)
