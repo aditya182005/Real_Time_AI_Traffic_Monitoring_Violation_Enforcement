@@ -403,6 +403,13 @@ def print_report(report):
               " ".join(f"{info['boxes'][c]:11}" for c in CLASSES))
 
     for split, info in report["splits"].items():
+        if info["images"] and info["negatives"] < 0.05 * info["images"]:
+            print(f"WARNING: only {info['negatives']} of {info['images']} "
+                  f"{split} pictures have no emergency vehicle. A model "
+                  "trained like this flags ordinary cars and vans; add "
+                  "negatives (--include-existing data/emergency_vehicle).")
+
+    for split, info in report["splits"].items():
         for c in CLASSES:
             if info["boxes"][c] < 10:
                 print(f"WARNING: only {info['boxes'][c]} {c} boxes in "
