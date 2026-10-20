@@ -165,6 +165,21 @@ class BuildTests(unittest.TestCase):
 
             self.assertEqual(total, 1)
 
+    def test_too_few_negatives_is_warned_about(self):
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as tmp:
+            src = make_source(tmp, "a", ["ambulance"],
+                              {f"p{i}": [f"0 {BOX}"] for i in range(40)})
+            _, report = self.build(tmp, [src])
+            out = io.StringIO()
+
+            with contextlib.redirect_stdout(out):
+                bd.print_report(report)
+
+        self.assertIn("flags ordinary cars and vans", out.getvalue())
+
     def test_output_is_a_valid_dataset_for_training(self):
         import train_emergency as te
 
