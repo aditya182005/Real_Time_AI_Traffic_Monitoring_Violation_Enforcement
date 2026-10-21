@@ -21,13 +21,13 @@ from pathlib import Path
 
 import cv2
 
-from app import live, paths, plates
-from app.analysis import VideoSettings, build_processor, validate_settings
-
 ROOT = Path(__file__).resolve().parent.parent
 
 if str(ROOT) not in sys.path:   # lets "python scripts/run_video.py" import app
     sys.path.insert(0, str(ROOT))
+
+from app import live, paths, plates
+from app.analysis import VideoSettings, build_processor, validate_settings
 
 OUTPUT_DIR = paths.OUTPUT_DIR
 DEFAULT_OUTPUT = "outputs/detections/tracked_traffic.mp4"
