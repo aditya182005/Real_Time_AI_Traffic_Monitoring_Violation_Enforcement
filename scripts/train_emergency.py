@@ -254,7 +254,7 @@ def main(argv=None, trainer=_ultralytics_trainer,
             Path(args.report).write_text(json.dumps(report, indent=2))
             print(f"Scores written to {args.report}")
 
-    print("Check it with: python check_setup.py --full")
+    print("Check it with: python scripts/check_setup.py --full")
 
     return 0
 

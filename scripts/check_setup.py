@@ -1,7 +1,7 @@
 """Check that this computer is ready to run Traffic Agent.
 
-    python check_setup.py            # quick checks (a second or two)
-    python check_setup.py --full     # also loads YOLO and runs it on a photo
+    python scripts/check_setup.py            # quick checks (a second or two)
+    python scripts/check_setup.py --full     # also loads YOLO and runs it on a photo
 
 Each line is OK, WARN (something works but a feature is off) or FAIL
 (the app will not run). The exit status is 1 if anything failed, so it can
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 

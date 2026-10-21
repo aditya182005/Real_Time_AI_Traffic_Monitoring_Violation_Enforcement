@@ -3,7 +3,7 @@
 The project plan asks for precision and recall on labelled test videos. Watch
 a clip, write down when each violation happens, then run:
 
-    python evaluate.py --video clip.mp4 --truth truth.csv --speed --collisions
+    python scripts/evaluate.py --video clip.mp4 --truth truth.csv --speed --collisions
 
 ``truth.csv`` has one row per real event:
 
@@ -16,7 +16,7 @@ a clip, write down when each violation happens, then run:
 when it happens in the video. A detection counts as correct when it is the
 same type and within ``--tolerance`` seconds (default 1.0) of a labelled
 event. All the options of run_video.py work here too (stop line, speed lines,
-signal and so on); see ``python evaluate.py --help``.
+signal and so on); see ``python scripts/evaluate.py --help``.
 
 Results are not saved to the database.
 """

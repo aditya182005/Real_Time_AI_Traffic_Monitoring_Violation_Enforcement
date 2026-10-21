@@ -11,7 +11,7 @@ How it works
    reads agree on wins, so one blurry frame cannot set the plate.
 
 The OCR engine is optional and is passed in, so everything here can be
-tested without it. Install it with ``pip install -r requirements-plates.txt``.
+tested without it. Install it with ``pip install -r requirements/plates.txt``.
 
 Honest limits: OCR on ordinary traffic footage is unreliable (small plates,
 motion blur, angles, night). Treat a plate as a suggestion for a person to

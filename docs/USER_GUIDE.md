@@ -46,8 +46,8 @@ as that measurement.
 **Run from the command line.**
 
 ```bash
-python run_video.py data/videos/traffic.mp4 --no-display --max-frames 300
-python evaluate.py --video clip.mp4 --truth truth.csv --speed --collisions
+python scripts/run_video.py data/videos/traffic.mp4 --no-display --max-frames 300
+python scripts/evaluate.py --video clip.mp4 --truth truth.csv --speed --collisions
 ```
 
 `--max-frames` is handy on a CPU-only machine.

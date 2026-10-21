@@ -35,13 +35,13 @@ same values: signal *cycle* 6 s red / 6 s green, stop line 60%, speed lines
 collisions on, emergency vehicles on):
 
 ```
-python run_video.py --input data/videos/demo_all_checks.mp4 --signal cycle --red-seconds 6 --green-seconds 6 --speed --distance-m 10 --speed-limit 40 --wrong-way --direction down --collisions --emergency
+python scripts/run_video.py --input data/videos/demo_all_checks.mp4 --signal cycle --red-seconds 6 --green-seconds 6 --speed --distance-m 10 --speed-limit 40 --wrong-way --direction down --collisions --emergency
 ```
 
 Score a real run against the expected events:
 
 ```
-python evaluate.py --video data/videos/demo_all_checks.mp4 --truth data/videos/demo_all_checks_truth.csv --signal cycle --red-seconds 6 --green-seconds 6 --speed --distance-m 10 --speed-limit 40 --wrong-way --direction down --collisions
+python scripts/evaluate.py --video data/videos/demo_all_checks.mp4 --truth data/videos/demo_all_checks_truth.csv --signal cycle --red-seconds 6 --green-seconds 6 --speed --distance-m 10 --speed-limit 40 --wrong-way --direction down --collisions
 ```
 
 `demo_all_checks_truth.csv` is what the checks report when detection is

@@ -8,5 +8,5 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 [ -f .env ] || cp .env.example .env
 echo
-echo "Setup finished. Check it with:  venv/bin/python check_setup.py --full"
+echo "Setup finished. Check it with:  venv/bin/python scripts/check_setup.py --full"
 echo "Then start the app with:        ./start.sh"

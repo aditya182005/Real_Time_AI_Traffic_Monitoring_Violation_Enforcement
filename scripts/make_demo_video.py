@@ -16,7 +16,7 @@ plain road on a script, so you know exactly what should happen:
 
 The ``_truth.csv`` file is not typed by hand: the script plays its own
 scripted vehicle positions through the real checks (a "perfect detector") and
-records what they report. ``evaluate.py`` can then compare your real model
+records what they report. ``scripts/evaluate.py`` can then compare your real model
 against it. Needs only OpenCV and NumPy.
 """
 
@@ -32,7 +32,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 
-if str(ROOT) not in sys.path:   # so run_video can be imported from scripts/
+if str(ROOT) not in sys.path:   # so the app package can be imported
     sys.path.insert(0, str(ROOT))
 SAMPLES = ROOT / "data" / "samples"
 VIDEO = ROOT / "data" / "videos" / "demo_all_checks.mp4"
@@ -333,7 +333,7 @@ def main(argv=None):
         print(f"  {event['time_seconds']:6.2f} s  emergency "
               f"({event['class_name']}), not scored")
 
-    print("\nRun it with:\n  python run_video.py --input "
+    print("\nRun it with:\n  python scripts/run_video.py --input "
           f"{output.relative_to(ROOT)} " + " ".join(SETTINGS))
 
     return 0

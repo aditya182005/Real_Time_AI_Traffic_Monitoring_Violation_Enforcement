@@ -50,6 +50,6 @@ and edit it. `.env` is git-ignored; never commit it.
 | `PLATE_REGION` | `IN` | `IN` applies the Indian plate format when cleaning OCR text; `ANY` does not. |
 | `PLATE_OCR` | empty | `off` disables plate reading even if EasyOCR is installed. |
 
-Plate reading needs `pip install -r requirements-plates.txt` (large download).
+Plate reading needs `pip install -r requirements/plates.txt` (large download).
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for server settings.

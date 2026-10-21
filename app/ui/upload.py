@@ -461,12 +461,12 @@ def _settings_panel(run_options=True, default_camera="CAM-01",
             value=False, disabled=not available, key="read_plates",
             help=None if available else
             "Needs the optional plate reader: pip install -r "
-            "requirements-plates.txt")
+            "requirements/plates.txt")
 
         if not available:
             st.caption(
                 "The plate reader is not installed "
-                "(`pip install -r requirements-plates.txt`).")
+                "(`pip install -r requirements/plates.txt`).")
         else:
             st.caption(
                 "Plates are personal data and OCR is often wrong on ordinary "
