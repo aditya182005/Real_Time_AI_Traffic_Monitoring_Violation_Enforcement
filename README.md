@@ -168,7 +168,10 @@ Exact versions are in [`requirements.txt`](requirements.txt).
 │   ├── database/               #   Legacy tables
 │   └── ui/                     #   Dashboard pages (upload, dashboard, evidence, ...)
 │
-├── scripts/                    # Developer tools (not needed to run the app)
+├── scripts/                    # Command-line tools
+│   ├── run_video.py            #   Run the whole pipeline on a video or stream
+│   ├── evaluate.py             #   Precision / recall against labelled events
+│   ├── check_setup.py          #   Is this computer ready?
 │   ├── train_emergency.py      #   Train and install the emergency model
 │   ├── build_emergency_dataset.py  # Merge downloaded datasets into one
 │   ├── check_emergency_model.py    # False-alarm / cross-dataset check
@@ -181,7 +184,7 @@ Exact versions are in [`requirements.txt`](requirements.txt).
 ├── data/
 │   ├── samples/                #   Pictures for a quick check (+ README, credits)
 │   ├── videos/                 #   traffic.mp4 and the all-checks demo video
-│   ├── images/                 #   test image used by check_setup.py
+│   ├── images/                 #   test image used by scripts/check_setup.py
 │   └── emergency_vehicle/      #   Cleaned training dataset (YOLO format)
 ├── models/                     # Put emergency_vehicle.pt here (not in git)
 ├── deploy/                     # nginx, Caddy, fail2ban, oauth2-proxy examples
@@ -189,13 +192,10 @@ Exact versions are in [`requirements.txt`](requirements.txt).
 ├── .github/workflows/          # CI and the emergency-model training workflow
 ├── .streamlit/config.toml      # Theme and the 200 MB upload limit
 │
-├── run_video.py                # CLI: run the whole pipeline on a video or stream
-├── evaluate.py                 # CLI: precision / recall against labelled events
-├── check_setup.py              # CLI: is this computer ready?
 ├── setup.bat / setup.sh        # First-time setup
 ├── start.bat / start.sh        # Start the dashboard
 ├── Dockerfile, docker-compose.yml
-├── requirements.txt, requirements-dev.txt, requirements-plates.txt
+├── requirements.txt              # Core packages; extras are in requirements/
 ├── .env.example                # Copy to .env
 ├── CONTRIBUTING.md, CHANGELOG.md
 └── README.md
@@ -221,12 +221,12 @@ Generated at run time and git-ignored: `outputs/` (evidence, videos, uploads),
    ```bash
    python -m venv venv
    venv\Scripts\activate            # macOS/Linux: source venv/bin/activate
-   pip install -r requirements.txt  # add -r requirements-dev.txt for tests
+   pip install -r requirements.txt  # add -r requirements/dev.txt for tests
    ```
 3. **Check the setup**
    ```bash
-   python check_setup.py            # quick: packages, files, Twilio settings
-   python check_setup.py --full     # also runs YOLO + ByteTrack on a test image
+   python scripts/check_setup.py            # quick: packages, files, Twilio settings
+   python scripts/check_setup.py --full     # also runs YOLO + ByteTrack on a test image
    ```
    Each line is `OK`, `WARN` (a feature is off) or `FAIL` (the app will not
    run), with the command that fixes it.
@@ -238,7 +238,7 @@ Always run commands from the project root.
 ### Try it with the sample data
 
 ```bash
-python run_video.py --input data/videos/demo_all_checks.mp4 --signal cycle \
+python scripts/run_video.py --input data/videos/demo_all_checks.mp4 --signal cycle \
   --red-seconds 6 --green-seconds 6 --speed --distance-m 10 --speed-limit 40 \
   --wrong-way --direction down --collisions --emergency --no-display
 ```
@@ -250,10 +250,10 @@ Expected events and the matching app settings are in
 ### Run from the command line
 
 ```bash
-python run_video.py --no-display                       # red-light check only
-python run_video.py --input my_clip.mp4 --speed --wrong-way --collisions
-python run_video.py --input rtsp://192.168.1.20/stream1 --collisions   # live
-python run_video.py --help                             # every option
+python scripts/run_video.py --no-display                       # red-light check only
+python scripts/run_video.py --input my_clip.mp4 --speed --wrong-way --collisions
+python scripts/run_video.py --input rtsp://192.168.1.20/stream1 --collisions   # live
+python scripts/run_video.py --help                             # every option
 ```
 
 ### Emergency-vehicle model
@@ -264,7 +264,7 @@ about 30 to 60 minutes. Step by step, with results, in
 
 ```bash
 python scripts/train_emergency.py --epochs 60 --device 0    # or use the Colab notebook
-python check_setup.py --full
+python scripts/check_setup.py --full
 ```
 
 ### Twilio alerts (optional)
@@ -282,7 +282,7 @@ Full list of settings: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 ### Tests
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -r requirements/dev.txt
 pytest
 ```
 
@@ -323,8 +323,8 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) (missing files, the
 | Emergency-vehicle false alarms | `scripts/check_emergency_model.py` on pictures with no emergency vehicle | Not measured on real footage yet |
 | Vehicle detection (cars, buses, ...) | Uses the pretrained COCO YOLOv8n | Not evaluated by this project |
 | Tracking (ID switches) | Needs hand-labelled tracks | Not measured |
-| Violation detection (precision / recall) | `evaluate.py` against labelled events | Run on the demo video and your own clips (see below) |
-| Real-time performance (FPS) | Printed by `run_video.py` and `evaluate.py` | Depends on hardware; CPU-only machines manage a few FPS |
+| Violation detection (precision / recall) | `scripts/evaluate.py` against labelled events | Run on the demo video and your own clips (see below) |
+| Real-time performance (FPS) | Printed by `scripts/run_video.py` and `scripts/evaluate.py` | Depends on hardware; CPU-only machines manage a few FPS |
 | Twilio success rate and latency | Alerts page | Needs your own Twilio account |
 
 **Read the emergency-model numbers carefully.** They come from one Colab run
@@ -336,7 +336,7 @@ different. Expect lower accuracy on your own cameras. Method, data and caveats:
 Measure violation detection on your own clips:
 
 ```bash
-python evaluate.py --video clip.mp4 --truth truth.csv --speed --collisions
+python scripts/evaluate.py --video clip.mp4 --truth truth.csv --speed --collisions
 ```
 
 ---

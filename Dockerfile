@@ -17,7 +17,7 @@ WORKDIR /app
 RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # Headless OpenCV (no display libraries); it replaces opencv-python.
-COPY requirements.txt requirements-plates.txt ./
+COPY requirements.txt ./
 RUN grep -v '^opencv-python' requirements.txt > requirements.docker.txt \
     && pip install -r requirements.docker.txt opencv-python-headless
 

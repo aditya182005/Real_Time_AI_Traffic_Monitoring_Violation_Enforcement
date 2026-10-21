@@ -2,11 +2,11 @@
 
 Examples (from the project root):
 
-    python run_video.py --no-display
-    python run_video.py --speed --distance-m 12 --speed-limit 50 --collisions
-    python run_video.py --input clip.mp4 --signal cycle --wrong-way --no-save
-    python run_video.py --input rtsp://192.168.1.20/stream1 --collisions
-    python run_video.py --input 0 --max-seconds 60 --plates     # webcam
+    python scripts/run_video.py --no-display
+    python scripts/run_video.py --speed --distance-m 12 --speed-limit 50 --collisions
+    python scripts/run_video.py --input clip.mp4 --signal cycle --wrong-way --no-save
+    python scripts/run_video.py --input rtsp://192.168.1.20/stream1 --collisions
+    python scripts/run_video.py --input 0 --max-seconds 60 --plates     # webcam
 
 This uses the same settings and code as the "Analyze footage" page of the
 dashboard, so results match.
@@ -14,6 +14,7 @@ dashboard, so results match.
 
 import argparse
 import os
+import sys
 import threading
 import uuid
 from pathlib import Path
@@ -23,7 +24,11 @@ import cv2
 from app import live, paths, plates
 from app.analysis import VideoSettings, build_processor, validate_settings
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
+
+if str(ROOT) not in sys.path:   # lets "python scripts/run_video.py" import app
+    sys.path.insert(0, str(ROOT))
+
 OUTPUT_DIR = paths.OUTPUT_DIR
 DEFAULT_OUTPUT = "outputs/detections/tracked_traffic.mp4"
 
@@ -90,7 +95,7 @@ def build_parser(add_help=True):
     other.add_argument(
         "--plates", action="store_true",
         help="Read the plate of each violating vehicle (needs EasyOCR: "
-             "pip install -r requirements-plates.txt)."
+             "pip install -r requirements/plates.txt)."
     )
     other.add_argument(
         "--emergency", action="store_true",
@@ -201,7 +206,7 @@ def run(args, parser, detector=None, tracker=None, emergency_detector=None,
         if plate_reader is None:
             parser.error(
                 "--plates needs the plate reader: "
-                "pip install -r requirements-plates.txt "
+                "pip install -r requirements/plates.txt "
                 "(and PLATE_OCR must not be 'off').")
 
     if detector is None:

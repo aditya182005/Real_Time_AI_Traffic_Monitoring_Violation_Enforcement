@@ -284,7 +284,7 @@ class PlateCommandLineTests(unittest.TestCase):
             run_video.main(["--input", str(self.video), "--plates",
                             "--no-display", "--no-save"])
 
-        self.assertIn("requirements-plates.txt", stderr.getvalue())
+        self.assertIn("requirements/plates.txt", stderr.getvalue())
 
     def test_plates_are_read_when_a_reader_is_given(self):
         with contextlib.redirect_stdout(io.StringIO()):

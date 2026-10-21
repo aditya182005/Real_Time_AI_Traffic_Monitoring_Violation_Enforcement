@@ -6,10 +6,10 @@
 |---|---|---|
 | Emergency detection | Ultralytics validation on the held-out test split: precision, recall, mAP@0.5, mAP@0.5:0.95, per class | Measured |
 | Emergency false alarms | `scripts/check_emergency_model.py` on negatives | Measured on dataset negatives only |
-| Violation detection | `evaluate.py` compares detected events with a hand-made truth CSV | Run on the demo video |
+| Violation detection | `scripts/evaluate.py` compares detected events with a hand-made truth CSV | Run on the demo video |
 | Vehicle detection | Pretrained COCO YOLOv8n | Not evaluated here |
 | Tracking | Needs labelled tracks | Not measured |
-| FPS | Printed by `run_video.py` and `evaluate.py` | Hardware dependent |
+| FPS | Printed by `scripts/run_video.py` and `scripts/evaluate.py` | Hardware dependent |
 | Twilio latency | Alerts page | Needs your account |
 
 ## Emergency model results
@@ -29,7 +29,7 @@ car 0.92), precision 0.94, recall 0.91.
 ## Evaluate violations on your own clip
 
 ```bash
-python evaluate.py --video clip.mp4 --truth truth.csv --speed --collisions
+python scripts/evaluate.py --video clip.mp4 --truth truth.csv --speed --collisions
 ```
 
 The demo truth file `data/videos/demo_all_checks_truth.csv` (see `data/samples/README.md`) shows the format. Report precision and

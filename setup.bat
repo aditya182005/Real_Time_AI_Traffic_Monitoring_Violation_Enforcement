@@ -9,7 +9,7 @@ python -m pip install --upgrade pip || goto :fail
 pip install -r requirements.txt || goto :fail
 if not exist .env copy .env.example .env >nul
 echo.
-echo Setup finished. Check it with:  venv\Scripts\python check_setup.py --full
+echo Setup finished. Check it with:  venv\Scripts\python scripts/check_setup.py --full
 echo Then start the app with:        start.bat
 exit /b 0
 :fail

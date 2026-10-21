@@ -3,7 +3,7 @@
 This guide puts the dashboard on a server so others can open it in a browser.
 It was written without being able to run Docker in the authoring environment:
 the CI workflow (`.github/workflows/ci.yml`) builds the image and runs
-`python check_setup.py --full` inside it, so a green CI run is the real proof.
+`python scripts/check_setup.py --full` inside it, so a green CI run is the real proof.
 Do the same check yourself on the first deploy (step 4).
 
 ## What you need
@@ -88,7 +88,7 @@ firewall, or change the compose port mapping to `127.0.0.1:8501:8501`.
 ## 4. Verify the deployment
 
 ```bash
-docker compose exec traffic-agent python check_setup.py --full
+docker compose exec traffic-agent python scripts/check_setup.py --full
 curl -I https://traffic.example.com/_stcore/health     # 200 OK
 ```
 
