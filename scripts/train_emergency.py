@@ -1,7 +1,7 @@
 """Train the emergency-vehicle model and install it where the app looks.
 
-    python train_emergency.py                 # 30 epochs
-    python train_emergency.py --epochs 60 --device 0
+    python scripts/train_emergency.py                 # 30 epochs
+    python scripts/train_emergency.py --epochs 60 --device 0
 
 On a CPU this takes hours. A GPU, for example a free Google Colab session,
 is far faster: upload the project, run this there, then download
@@ -17,7 +17,7 @@ import shutil
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 DATA_YAML = ROOT / "data" / "emergency_vehicle" / "data.yaml"
 INSTALLED_WEIGHTS = ROOT / "models" / "emergency_vehicle.pt"
 IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}

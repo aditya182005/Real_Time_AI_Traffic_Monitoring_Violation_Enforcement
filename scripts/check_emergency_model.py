@@ -1,7 +1,7 @@
 """Check the emergency model on pictures it was NOT trained on.
 
-    python check_emergency_model.py
-    python check_emergency_model.py --data other_dataset/data.yaml --conf 0.4
+    python scripts/check_emergency_model.py
+    python scripts/check_emergency_model.py --data other_dataset/data.yaml --conf 0.4
 
 It reports three things, in plain words:
 
@@ -18,7 +18,7 @@ import argparse
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 DATA_YAML = ROOT / "data" / "emergency_vehicle" / "data.yaml"
 WEIGHTS = ROOT / "models" / "emergency_vehicle.pt"
 IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}

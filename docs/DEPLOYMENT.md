@@ -11,8 +11,7 @@ Do the same check yourself on the first deploy (step 4).
 * A Linux server or VM with Docker and the Compose plugin. 2 CPUs and 4 GB of
   RAM is the practical minimum (PyTorch and YOLO need the memory).
 * A domain name pointing at it, for HTTPS.
-* Optional: `models/emergency_vehicle.pt` (see the README, "Training the
-  emergency-vehicle model").
+* Optional: `models/emergency_vehicle.pt` (see [TRAINING.md](TRAINING.md)).
 
 ## 1. Configure
 
@@ -27,7 +26,7 @@ Edit `.env`:
 | Sign-in | **Required in production**: the app refuses to show anything without it. Pick one: individual accounts (`docker compose exec traffic-agent python -m app.users add alice --role admin`), `DASHBOARD_PASSWORD`, or `AUTH_MODE=proxy` (below). |
 | `LIVE_CAMERAS` | Cameras people may start, as `Name=rtsp://...;Name2=...`. Contains passwords: keep `.env` private. |
 | `LIVE_MAX_CAMERAS` | Cameras analyzed at once (default 1). Each one needs its own share of CPU/GPU. |
-| `TWILIO_*`, `ALERT_TO_PHONE` | Optional SMS/voice alerts. Test first with `python -m app.alerts.twilio_alert --send` (see the README). |
+| `TWILIO_*`, `ALERT_TO_PHONE` | Optional SMS/voice alerts. Test first with `python -m app.alerts.twilio_alert --send` (see [CONFIGURATION.md](CONFIGURATION.md)). |
 | `CAMERA_ID` | Name stored with records and alerts. |
 | `UPLOAD_RETENTION_DAYS` | Deletes upload-run folders older than this. `docker-compose.yml` sets 30. `0` keeps everything. Database rows are never deleted. |
 

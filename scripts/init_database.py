@@ -1,3 +1,10 @@
+"""Create the database tables (the app also does this on first use)."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from app.database.database import Database
 from app.violation.violation_logger import setup_database
 
