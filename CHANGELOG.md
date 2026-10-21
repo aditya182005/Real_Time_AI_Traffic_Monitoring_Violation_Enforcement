@@ -4,6 +4,7 @@
 
 * Restructured the repository: tools moved to `scripts/`, deployment guide to `docs/DEPLOYMENT.md`.
 * Company-style README and a documentation set under `docs/`.
+* Added the MIT License.
 
 ## Earlier work
 

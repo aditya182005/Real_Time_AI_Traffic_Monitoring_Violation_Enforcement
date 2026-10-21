@@ -405,7 +405,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## 📄 License and Credits
 
-No licence file has been added yet; add one before sharing the code publicly.
-Training and sample pictures come from public Roboflow Universe datasets under
+The project's own code is released under the [MIT License](LICENSE).
+
+Third-party terms still apply: Ultralytics YOLOv8 is licensed under AGPL-3.0
+(check it before using this commercially or offering it as a network service),
+and training and sample pictures come from public Roboflow Universe datasets under
 **CC BY 4.0**; the list and links are in [docs/TRAINING.md](docs/TRAINING.md)
 and [data/samples/README.md](data/samples/README.md).
