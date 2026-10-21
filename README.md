@@ -455,6 +455,14 @@ pytest
 
 The tests use stand-in detectors, so they do not need model weights or a GPU.
 
+### Sample data to try it with
+
+`data/samples` has pictures of ambulances, fire trucks, police cars and
+ordinary vehicles, and `data/videos/demo_all_checks.mp4` is a 30 second video
+in which every check (red light, speeding, wrong way, collision, emergency
+vehicles) fires once. The exact settings and what to expect are in
+`data/samples/README.md`.
+
 ### Measuring accuracy
 
 Watch a clip, note when each violation really happens, and write them down:
