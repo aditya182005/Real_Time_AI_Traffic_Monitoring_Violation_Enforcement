@@ -1,0 +1,62 @@
+{
+ "ambulance_1.jpg": [
+  0.5523,
+  0.5266,
+  0.8172,
+  0.9469
+ ],
+ "ambulance_2.jpg": [
+  0.5109,
+  0.5563,
+  0.7969,
+  0.6656
+ ],
+ "ambulance_3.jpg": [
+  0.468,
+  0.4648,
+  0.7703,
+  0.8766
+ ],
+ "fire_truck_1.jpg": [
+  0.4664,
+  0.5508,
+  0.8828,
+  0.8359
+ ],
+ "fire_truck_2.jpg": [
+  0.5039,
+  0.5414,
+  0.8734,
+  0.8641
+ ],
+ "fire_truck_3.jpg": [
+  0.5328,
+  0.4938,
+  0.7937,
+  0.6219
+ ],
+ "police_car_1.jpg": [
+  0.5031,
+  0.543,
+  0.8625,
+  0.6391
+ ],
+ "police_car_2.jpg": [
+  0.5039,
+  0.6,
+  0.9359,
+  0.7781
+ ],
+ "police_car_3.jpg": [
+  0.5039,
+  0.5711,
+  0.8672,
+  0.7141
+ ],
+ "ordinary_1.jpg": null,
+ "ordinary_2.jpg": null,
+ "ordinary_3.jpg": null,
+ "ordinary_4.jpg": null,
+ "ordinary_5.jpg": null,
+ "ordinary_6.jpg": null
+}
