@@ -172,6 +172,7 @@ Exact versions are in [`requirements.txt`](requirements.txt).
 │   ├── run_video.py            #   Run the whole pipeline on a video or stream
 │   ├── evaluate.py             #   Precision / recall against labelled events
 │   ├── check_setup.py          #   Is this computer ready?
+│   ├── footage_report.py       #   Batch-run real clips and report false alarms / hits
 │   ├── train_emergency.py      #   Train and install the emergency model
 │   ├── build_emergency_dataset.py  # Merge downloaded datasets into one
 │   ├── check_emergency_model.py    # False-alarm / cross-dataset check
@@ -333,7 +334,14 @@ pictures may appear in both training and test data, and real CCTV frames look
 different. Expect lower accuracy on your own cameras. Method, data and caveats:
 [docs/EVALUATION.md](docs/EVALUATION.md).
 
-Measure violation detection on your own clips:
+Measure on your own clips (batch report of false alarms and hits; steps in
+[docs/EVALUATION.md](docs/EVALUATION.md)):
+
+```bash
+python scripts/footage_report.py --normal clips/normal --emergency clips/emergency
+```
+
+Measure violation detection on one labelled clip:
 
 ```bash
 python scripts/evaluate.py --video clip.mp4 --truth truth.csv --speed --collisions

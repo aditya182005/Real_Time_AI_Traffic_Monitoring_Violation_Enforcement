@@ -34,3 +34,33 @@ python scripts/evaluate.py --video clip.mp4 --truth truth.csv --speed --collisio
 
 The demo truth file `data/videos/demo_all_checks_truth.csv` (see `data/samples/README.md`) shows the format. Report precision and
 recall per violation type, and review false alarms by hand.
+
+## Testing on real footage (step by step)
+
+This is how to replace the "not measured" rows with real numbers.
+
+1. **Collect clips** (10-60 seconds each, 5-10 clips is enough to start):
+   * `clips/normal/`: ordinary traffic with **no** ambulance, fire truck or
+     police car. Include a variety: day, night or evening, rain, busy, empty.
+   * `clips/emergency/`: clips that clearly show an emergency vehicle.
+   Use footage you have the right to use. The `clips/` folder is git-ignored.
+2. **Make sure the model is in place**: `models/emergency_vehicle.pt`.
+3. **Run the batch** (add the checks you want after `--`):
+
+   ```bash
+   python scripts/footage_report.py --normal clips/normal --emergency clips/emergency -- --speed --wrong-way --collisions
+   ```
+
+   On a CPU-only machine this takes a while; start with short clips.
+4. **Read `outputs/footage_report.md`**: false alarms per hour of normal video,
+   and how many emergency clips were detected at all.
+5. **Check by eye**: open the annotated videos in `outputs/footage/` and look at
+   each emergency event in a normal clip. If it really is not an emergency
+   vehicle, it is a false alarm (the report counts every event as one, so a
+   genuine one inside a "normal" clip means the clip was mislabelled).
+6. **Record the numbers** in the README's Evaluation table, with the number and
+   length of clips, so the claim can be checked.
+
+To score violations (red light, speed, wrong way), write a truth CSV for one
+clip by hand (see `data/videos/demo_all_checks_truth.csv`) and run
+`python scripts/evaluate.py` on it.
