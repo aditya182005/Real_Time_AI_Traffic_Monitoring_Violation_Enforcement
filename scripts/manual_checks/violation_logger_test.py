@@ -1,3 +1,12 @@
+"""Manual check: run from the project root, e.g.
+    python scripts/manual_checks/violation_logger_test.py
+Not part of the automated tests (see tests/)."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 
 import sqlite3
 

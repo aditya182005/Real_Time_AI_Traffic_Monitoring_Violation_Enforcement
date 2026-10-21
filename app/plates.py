@@ -16,7 +16,7 @@ tested without it. Install it with ``pip install -r requirements-plates.txt``.
 Honest limits: OCR on ordinary traffic footage is unreliable (small plates,
 motion blur, angles, night). Treat a plate as a suggestion for a person to
 check against the evidence image, never as proof. Plates are personal data:
-see the retention setting in DEPLOY.md.
+see the retention setting in docs/DEPLOYMENT.md.
 """
 
 import importlib.util

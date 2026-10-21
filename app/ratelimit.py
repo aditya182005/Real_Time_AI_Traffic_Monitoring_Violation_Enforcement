@@ -7,7 +7,7 @@ out; each repeat lockout lasts twice as long, up to ``max_lockout``.
 
 Limits: the counts live in memory, so a restart clears them, and a client
 address taken from a forwarded header is only as trustworthy as the proxy
-that sets it. Also rate-limit at the reverse proxy (see DEPLOY.md).
+that sets it. Also rate-limit at the reverse proxy (see docs/DEPLOYMENT.md).
 """
 
 import threading

@@ -284,13 +284,13 @@ class NotebookTests(unittest.TestCase):
     def test_the_colab_notebook_is_valid_and_runs_the_real_script(self):
         import json
 
-        path = Path(te.__file__).parent / "notebooks" / \
+        path = Path(te.__file__).resolve().parent.parent / "notebooks" / \
             "train_emergency_colab.ipynb"
         notebook = json.loads(path.read_text())
         source = "\n".join("".join(c["source"]) for c in notebook["cells"])
 
         self.assertEqual(notebook["nbformat"], 4)
-        self.assertIn("python train_emergency.py", source)
+        self.assertIn("python scripts/train_emergency.py", source)
         self.assertIn("files.download('models/emergency_vehicle.pt')", source)
 
         # Every option the notebook passes must exist in the script.
@@ -302,13 +302,13 @@ class NotebookTests(unittest.TestCase):
         import json
         import build_emergency_dataset as bd
 
-        path = Path(te.__file__).parent / "notebooks" / \
+        path = Path(te.__file__).resolve().parent.parent / "notebooks" / \
             "train_emergency_colab_new_data.ipynb"
         notebook = json.loads(path.read_text())
         source = "\n".join("".join(c["source"]) for c in notebook["cells"])
 
-        self.assertIn("python build_emergency_dataset.py", source)
-        self.assertIn("python train_emergency.py --data", source)
+        self.assertIn("python scripts/build_emergency_dataset.py", source)
+        self.assertIn("python scripts/train_emergency.py --data", source)
         self.assertIn('supervision>=0.20,<0.31', source)
 
         te.build_parser().parse_args(

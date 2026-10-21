@@ -2,7 +2,7 @@
 
 Classes: 0 ambulance, 1 fire_truck, 2 police_car.
 
-    python build_emergency_dataset.py \
+    python scripts/build_emergency_dataset.py \
         --source downloads/a --source downloads/b --source downloads/c:fire_truck
 
 Each ``--source`` is a folder in YOLO format with a ``data.yaml`` (what
@@ -33,7 +33,7 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 CLASSES = ["ambulance", "fire_truck", "police_car"]
 IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 ORDINARY = {
@@ -442,7 +442,7 @@ def main(argv=None):
 
     print_report(report)
     print(f"\nWritten to {args.output}. Train with:\n"
-          f"  python train_emergency.py --data {args.output}/data.yaml")
+          f"  python scripts/train_emergency.py --data {args.output}/data.yaml")
 
     return 0
 

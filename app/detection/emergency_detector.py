@@ -8,7 +8,7 @@ DEFAULT_CONFIDENCE = 0.65
 class EmergencyDetector:
     """Detects ambulances, fire trucks and police cars with the custom model.
 
-    The weights come from ``train_emergency.py`` and are not stored in git:
+    The weights come from ``scripts/train_emergency.py`` and are not stored in git:
     copy ``runs/detect/emergency_vehicle/weights/best.pt`` to
     ``models/emergency_vehicle.pt``.
     """

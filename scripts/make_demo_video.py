@@ -1,6 +1,6 @@
 """Build the demo video that triggers every check once.
 
-    python make_demo_video.py
+    python scripts/make_demo_video.py
 
 Writes ``data/videos/demo_all_checks.mp4`` and
 ``data/videos/demo_all_checks_truth.csv`` from the pictures in
@@ -30,7 +30,10 @@ from types import SimpleNamespace
 import cv2
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
+
+if str(ROOT) not in sys.path:   # so run_video can be imported from scripts/
+    sys.path.insert(0, str(ROOT))
 SAMPLES = ROOT / "data" / "samples"
 VIDEO = ROOT / "data" / "videos" / "demo_all_checks.mp4"
 TRUTH = ROOT / "data" / "videos" / "demo_all_checks_truth.csv"

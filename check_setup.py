@@ -145,7 +145,7 @@ def check_files(root=ROOT):
         Check(WARN, "Emergency-vehicle model",
               "models/emergency_vehicle.pt is missing: emergency detection "
               "and the signal override are off",
-              "python train_emergency.py   (a GPU, for example Google "
+              "python scripts/train_emergency.py   (a GPU, for example Google "
               "Colab, makes this much faster)")
     )
 
@@ -313,7 +313,7 @@ def smoke_test(root=ROOT, detector=None, tracker=None, emergency=None):
         checks.append(Check(
             WARN, "Emergency detection",
             "skipped: models/emergency_vehicle.pt is missing",
-            "python train_emergency.py",
+            "python scripts/train_emergency.py",
         ))
 
         return checks
@@ -328,7 +328,7 @@ def smoke_test(root=ROOT, detector=None, tracker=None, emergency=None):
     except Exception as exc:
         checks.append(Check(
             FAIL, "Emergency detection", f"{type(exc).__name__}: {exc}",
-            "Re-run train_emergency.py, or remove the weights file.",
+            "Re-run scripts/train_emergency.py, or remove the weights file.",
         ))
     else:
         checks.append(Check(

@@ -1,4 +1,4 @@
-# Traffic Agent dashboard. CPU only; see DEPLOY.md for GPU notes.
+# Traffic Agent dashboard. CPU only; see docs/DEPLOYMENT.md for GPU notes.
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \

@@ -50,7 +50,7 @@ checks). Your model should match it; misses or extras mean the detector or
 tracker struggled, not the rules. Emergency events are shown in the output
 but not scored.
 
-The video is made by `python make_demo_video.py` from the pictures above
+The video is made by `python scripts/make_demo_video.py` from the pictures above
 (vehicles are photo patches driven across a plain road), so it is a pipeline
 demo, not real traffic. The real YOLO and tracker on it have not been
 checked by the author.

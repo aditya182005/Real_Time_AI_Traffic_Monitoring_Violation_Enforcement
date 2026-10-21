@@ -31,7 +31,7 @@ jobs:
           pip install "ultralytics>=8.1" "opencv-python-headless" numpy pandas pillow
       - name: Train, then score on the validation and test images
         run: |
-          python train_emergency.py --device cpu --batch 16 --epochs 100 \
+          python scripts/train_emergency.py --device cpu --batch 16 --epochs 100 \
             --imgsz "${{ github.event.inputs.imgsz || '640' }}" \
             --time "${{ github.event.inputs.hours || '4.5' }}" \
             --report emergency_scores.json | tee train.log
