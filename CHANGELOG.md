@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+* Human review of violations (pending / approved / rejected) with audit trail.
+* Tamper-evident records: evidence hashes, model version and a hash chain;
+  `python -m app.integrity verify` and an Admin check.
+* Fine table from `FINES_FILE`; per-camera profiles from `CAMERAS_FILE`
+  (`--profile`).
+* Retention, plate export and erasure (`python -m app.privacy`,
+  `EVIDENCE_RETENTION_DAYS`).
+* Signal state read from the traffic lamp in the video (`--signal lamp`).
+* New `docs/PRODUCTION.md`.
+
 * Restructured the repository: tools moved to `scripts/`, deployment guide to `docs/DEPLOYMENT.md`.
 * Company-style README and a documentation set under `docs/`.
 * Added the MIT License.

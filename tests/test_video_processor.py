@@ -17,6 +17,9 @@ except ImportError:  # pragma: no cover
 
 from app.violation import violation_logger as vl
 
+# The same scripted car as VideoProcessorTests.BOTTOMS.
+BOTTOMS_FOR_LAMP = [None, None, 100, 140, 180, 220, 260, 300, 340]
+
 
 class FakeDetector:
     def detect(self, frame):

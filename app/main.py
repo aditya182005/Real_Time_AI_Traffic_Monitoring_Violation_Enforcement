@@ -1,3 +1,4 @@
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -30,10 +31,11 @@ auth.require_login()
 def _housekeeping():
     """Once per server start: remove old upload runs if retention is set."""
 
-    from app import housekeeping, paths
+    from app import housekeeping, paths, privacy
 
     uploads = paths.OUTPUT_DIR / "uploads"
     housekeeping.cleanup_staging(uploads)
+    privacy.purge_old(privacy.retention_days())
 
     return housekeeping.cleanup_old_runs(
         uploads, housekeeping.retention_days()
@@ -42,7 +44,7 @@ def _housekeeping():
 
 try:
     _housekeeping()
-except OSError:
+except (OSError, sqlite3.Error):
     pass  # cleaning up is best effort; never block the app on it
 
 # Pages grouped by what the person is doing, in the order they are listed.

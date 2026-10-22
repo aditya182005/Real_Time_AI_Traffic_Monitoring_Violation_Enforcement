@@ -3,7 +3,10 @@
 import pandas as pd
 import streamlit as st
 
-from app import audit, health, live, users
+import sqlite3
+from contextlib import closing
+
+from app import audit, health, integrity, live, paths, users
 from app.ui import auth, theme
 from app.ui.helpers import show_df
 
@@ -16,8 +19,8 @@ def render():
     if not auth.require("admin", "open the Admin page"):
         return
 
-    tab_status, tab_audit, tab_users = st.tabs(
-        ["System status", "Audit log", "Accounts"])
+    tab_status, tab_audit, tab_users, tab_integrity = st.tabs(
+        ["System status", "Audit log", "Accounts", "Record integrity"])
 
     with tab_status:
         report = health.run_checks()
@@ -71,3 +74,39 @@ def render():
         st.caption("Accounts are managed from the command line so that "
                    "passwords are never typed into a web page: "
                    "`python -m app.users add|passwd|remove|list`.")
+
+    with tab_integrity:
+        st.caption("Checks that stored violations and their evidence images "
+                   "were not altered since they were saved.")
+
+        if st.button("Verify records", key="verify_integrity"):
+            if not paths.DB_PATH.exists():
+                st.info("No database yet.")
+            else:
+                with closing(sqlite3.connect(str(paths.DB_PATH))) as conn:
+                    result = integrity.verify(conn)
+
+                st.write(f"{result['sealed']} sealed record(s), "
+                         f"{result['unsealed']} older record(s) without a seal.")
+
+                if result["problems"]:
+                    st.error(f"{len(result['problems'])} problem(s) found.")
+                    show_df(pd.DataFrame(
+                        result["problems"],
+                        columns=["record", "problem", "detail"]))
+                else:
+                    st.success("No changes detected.")
+
+                if result["warnings"]:
+                    st.warning(f"{len(result['warnings'])} evidence file(s) "
+                               "are missing (for example removed by retention).")
+
+                st.code(result["head"] or "(no sealed records)")
+                st.caption("Save this head hash outside the server after each "
+                           "review session. See docs/PRODUCTION.md.")
+
+                audit.record("verify_integrity",
+                             user=(auth.current_user() or {}).get("name"),
+                             role=auth.current_role(),
+                             detail=f"problems={len(result['problems'])}",
+                             address=auth.client_address())

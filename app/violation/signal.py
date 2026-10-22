@@ -6,6 +6,7 @@ class SignalSimulator:
     """
 
     VALID_STATES = ("RED", "GREEN")
+    label = "simulated"
 
     def __init__(self, fixed=None, red_seconds=None, green_seconds=None,
                  start="RED"):

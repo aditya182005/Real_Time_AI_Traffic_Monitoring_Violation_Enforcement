@@ -99,8 +99,21 @@ class AttentionTests(unittest.TestCase):
 
         calm = sample_data()
         calm["collisions"] = pd.DataFrame()
+        calm["violations"]["review_status"] = ["approved", "rejected"]
         self.assertEqual(analytics.attention_items(calm, True),
                          [("ok", "Nothing needs attention in this period.")])
+
+    def test_unreviewed_violations_ask_for_review(self):
+        data = sample_data()
+        data["collisions"] = pd.DataFrame()
+        items = analytics.attention_items(data, True)
+
+        self.assertTrue(any("waiting for a person to review" in t
+                            for _, t in items))
+        self.assertEqual(analytics.pending_review_count(data["violations"]), 2)
+        data["violations"]["review_status"] = ["approved", None]
+        self.assertEqual(analytics.pending_review_count(data["violations"]), 1)
+        self.assertEqual(analytics.approved_fines(data["violations"]), 1000)
 
 
 class PeakHourTests(unittest.TestCase):

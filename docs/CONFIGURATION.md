@@ -35,6 +35,17 @@ and edit it. `.env` is git-ignored; never commit it.
 | `AUTH_PROXY_ADMINS`, `AUTH_PROXY_OPERATORS` | empty | Emails given those roles. |
 | `AUTH_PROXY_DEFAULT_ROLE` | `viewer` | Role for everyone else. |
 
+## Production
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `FINES_FILE` | empty | JSON fine table. Blank uses the demo amounts. See `deploy/fines.example.json`. |
+| `CAMERAS_FILE` | empty | JSON of per-camera calibration, used with `--profile NAME`. See `deploy/cameras.example.json`. |
+| `EVIDENCE_RETENTION_DAYS` | `0` | Delete evidence images, crops and plate text older than this. `0` keeps everything. |
+| `MODEL_VERSION` | derived | Label stored with each violation. |
+
+See [PRODUCTION.md](PRODUCTION.md).
+
 ## Live cameras
 
 | Variable | Default | Meaning |
