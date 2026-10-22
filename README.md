@@ -61,7 +61,8 @@ a web dashboard.
   lane are sliders in percent of the frame, drawn on the first frame, so they
   work at any resolution.
 * **Switch on the checks you need:** red light (against a simulated signal
-  that is always red, always green, or cycles), speeding (two lines a known
+  that is always red, always green or cycles, or one read from the traffic
+  lamp in the video), speeding (two lines a known
   distance apart), wrong way, possible collisions, and emergency-vehicle
   priority.
 * **Keep a record.** Every event is saved to SQLite with an annotated evidence
@@ -71,6 +72,11 @@ a web dashboard.
 * **Watch a live camera.** **Live camera** analyzes an RTSP/HTTP stream or a
   webcam in the background, reconnects automatically, and skips frames when it
   falls behind.
+* **Review before anything is final.** Each violation starts *pending*; an
+  operator approves or rejects it on the Evidence page. Records carry evidence
+  hashes and a hash chain, so `python -m app.integrity verify` shows whether
+  anything was altered. Retention and plate erasure are in `python -m app.privacy`.
+  See [docs/PRODUCTION.md](docs/PRODUCTION.md).
 * **Read license plates (optional).** With EasyOCR installed, the plate of each
   violating vehicle is read, cleaned up and voted on across frames. Treat the
   result as a suggestion to verify.
@@ -157,6 +163,9 @@ Exact versions are in [`requirements.txt`](requirements.txt).
 │   ├── annotate.py             #   Drawing boxes, banners, calibration lines
 │   ├── live.py                 #   RTSP / webcam capture and monitors
 │   ├── plates.py               #   License-plate reading (optional)
+│   ├── review.py, integrity.py #   Approve/reject; tamper-evident records
+│   ├── fines.py, cameras.py    #   Fine table and per-camera profiles (JSON)
+│   ├── privacy.py              #   Retention, export and erasure
 │   ├── users.py, ratelimit.py  #   Accounts, password hashing, lockouts
 │   ├── audit.py, health.py     #   Audit trail, logging, health checks
 │   ├── paths.py, env.py        #   Where files live; .env loading
@@ -382,6 +391,7 @@ python scripts/evaluate.py --video clip.mp4 --truth truth.csv --speed --collisio
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | All settings in `.env` |
 | [docs/TRAINING.md](docs/TRAINING.md) | Build the dataset and train the emergency model |
 | [docs/EVALUATION.md](docs/EVALUATION.md) | What is measured, how, and what the numbers mean |
+| [docs/PRODUCTION.md](docs/PRODUCTION.md) | Review workflow, record integrity, privacy, what still needs an authority |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker, HTTPS, sign-in, backups, security |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common errors and fixes |
 | [data/samples/README.md](data/samples/README.md) | Sample pictures, demo video, credits |

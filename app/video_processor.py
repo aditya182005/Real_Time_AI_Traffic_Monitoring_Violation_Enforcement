@@ -389,6 +389,11 @@ class TrafficVideoProcessor:
                 elif not emergencies:
                     emergency_logged = False
 
+                observe = getattr(self.signal, "observe", None)
+
+                if observe is not None:   # a lamp reader needs the picture
+                    observe(frame)
+
                 override = tick <= override_until
                 signal_state = (
                     "GREEN" if override
@@ -505,7 +510,8 @@ class TrafficVideoProcessor:
                         cv2.line(frame, (0, line_y), (width_now, line_y),
                                  AMBER, 1)
 
-                banner = f"Signal: {signal_state} (simulated)"
+                signal_label = getattr(self.signal, "label", "simulated")
+                banner = f"Signal: {signal_state} ({signal_label})"
 
                 if override:
                     banner = "Signal: GREEN (emergency override, simulated)"

@@ -241,6 +241,31 @@ def recent_events(data, limit=10):
     return table.drop(columns="_t").head(limit).reset_index(drop=True)
 
 
+def approved_fines(df):
+    """Sum of fines on violations a person has approved."""
+
+    if df.empty or "fine_amount" not in df.columns \
+            or "review_status" not in df.columns:
+        return 0
+
+    approved = df[df["review_status"] == "approved"]
+
+    return float(pd.to_numeric(
+        approved["fine_amount"], errors="coerce").fillna(0).sum())
+
+
+def pending_review_count(df):
+    """Violations nobody has approved or rejected yet."""
+
+    if df.empty:
+        return 0
+
+    if "review_status" not in df.columns:
+        return len(df)
+
+    return int((~df["review_status"].isin(["approved", "rejected"])).sum())
+
+
 def attention_items(data, twilio_configured):
     """What a person should look at, as ``(kind, text)`` pairs.
 
@@ -263,6 +288,12 @@ def attention_items(data, twilio_configured):
         if not twilio_configured:
             items.append(("info", "Twilio is not set up, so collision "
                           "alerts are skipped."))
+
+    pending = pending_review_count(data.get("violations", pd.DataFrame()))
+
+    if pending:
+        items.append(("warn", f"{pending} violation(s) are waiting for a "
+                      "person to review them on the Evidence page."))
 
     everything = [data.get(key) for key in
                   ("violations", "collisions", "priority", "density")]

@@ -5,6 +5,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from app.annotate import EMERGENCY, VEHICLE, draw_banner, draw_box
+from app.violation.lamp import LampSignal
 from app.violation.signal import SignalSimulator
 
 
@@ -81,9 +82,10 @@ class VideoSettings:
 
     camera_id: str = "CAM-01"
     stop_line_pct: float = 60
-    signal_mode: str = "red"            # red | green | cycle
+    signal_mode: str = "red"            # red | green | cycle | lamp
     red_seconds: float = 10
     green_seconds: float = 10
+    lamp_roi_pct: tuple = (0, 0, 0, 0)   # x1,y1,x2,y2 of the lamp (signal_mode "lamp")
 
     check_speed: bool = False
     speed_line_a_pct: float = 45
@@ -134,10 +136,20 @@ def validate_settings(settings):
     ):
         problems.append("Signal times must be above zero.")
 
+    if settings.signal_mode == "lamp":
+        try:
+            LampSignal(settings.lamp_roi_pct)
+        except (ValueError, TypeError):
+            problems.append(
+                "Give the lamp area as x1,y1,x2,y2 percent (x1<x2, y1<y2).")
+
     return problems
 
 
 def build_signal(settings):
+    if settings.signal_mode == "lamp":
+        return LampSignal(settings.lamp_roi_pct)
+
     if settings.signal_mode == "green":
         return SignalSimulator.fixed("GREEN")
 

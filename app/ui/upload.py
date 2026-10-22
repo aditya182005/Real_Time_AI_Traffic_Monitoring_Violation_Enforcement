@@ -39,6 +39,7 @@ SIGNAL_MODES = {
     "Always red": "red",
     "Always green": "green",
     "Cycle red and green": "cycle",
+    "Read from the traffic lamp": "lamp",
 }
 
 DIRECTIONS = {
@@ -366,7 +367,7 @@ def _settings_panel(run_options=True, default_camera="CAM-01",
             "Stop line (% from top)", 5, 95, 60, key="stop_line_pct",
             help="Drag until the red line sits on the stop line.",
         )
-        mode = st.radio("Simulated signal", list(SIGNAL_MODES),
+        mode = st.radio("Signal", list(SIGNAL_MODES),
                         key="signal_mode")
         settings.signal_mode = SIGNAL_MODES[mode]
 
@@ -376,6 +377,18 @@ def _settings_panel(run_options=True, default_camera="CAM-01",
                 "Red (seconds)", 1, 300, 10, key="red_s")
             settings.green_seconds = b.number_input(
                 "Green (seconds)", 1, 300, 10, key="green_s")
+
+        if settings.signal_mode == "lamp":
+            st.caption("Box the traffic lamp in the picture, in percent of "
+                       "the frame. Red lit means RED; green or amber means "
+                       "GREEN. Check the first seconds by eye.")
+            a, b, c, d = st.columns(4)
+            settings.lamp_roi_pct = (
+                a.number_input("Left %", 0, 99, 80, key="lamp_x1"),
+                b.number_input("Top %", 0, 99, 5, key="lamp_y1"),
+                c.number_input("Right %", 1, 100, 90, key="lamp_x2"),
+                d.number_input("Bottom %", 1, 100, 25, key="lamp_y2"),
+            )
 
     with st.expander("Speed check"):
         settings.check_speed = st.checkbox(

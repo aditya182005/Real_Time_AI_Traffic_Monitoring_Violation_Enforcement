@@ -3,8 +3,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from app import paths
-from app.ui import theme
+from app import paths, review
+from app.ui import auth, theme
 from app.ui.data import ROOT
 from app.ui.helpers import show_image
 
@@ -72,15 +72,35 @@ def render(data):
                 "page, or run a detection script.")
         return
 
+    evidence["review"] = [
+        review.status_of(row.get("review_status"))
+        if row["kind"] == "Violation" else ""
+        for _, row in evidence.iterrows()
+    ]
+
+    choice = st.radio(
+        "Show", ["All", "Pending review", "Approved", "Rejected"],
+        horizontal=True, key="evidence_review_filter")
+    wanted = {"Pending review": review.PENDING, "Approved": review.APPROVED,
+              "Rejected": review.REJECTED}.get(choice)
+
+    if wanted:
+        evidence = evidence[evidence["review"] == wanted].reset_index(drop=True)
+
+        if evidence.empty:
+            st.info(f"No violations are {choice.lower()}.")
+            return
+
     def describe(i):
         row = evidence.iloc[i]
         plate = row.get("plate_text")
         plate = f", plate {plate}" if isinstance(plate, str) and plate else ""
+        state = f" [{row['review']}]" if row.get("review") else ""
 
         return (
             f"{row['kind']}, {row.get('violation_type', '')}, "
             f"track {row.get('track_id', row.get('track_id_1', '?'))}"
-            f"{plate}, {str(row.get('timestamp', ''))[:19]}"
+            f"{plate}, {str(row.get('timestamp', ''))[:19]}{state}"
         )
 
     index = st.selectbox(
@@ -110,9 +130,58 @@ def render(data):
         else:
             st.caption("No crop saved for this event.")
 
+        _review_controls(row)
+
         st.markdown("**Details**")
         st.json({
             key: (None if pd.isna(value) else str(value))
             for key, value in row.items()
             if key not in ("evidence_path", "crop_path")
         })
+
+
+def _review_controls(row):
+    """Approve / reject a violation (operators and admins)."""
+
+    if row.get("kind") != "Violation" or pd.isna(row.get("id")):
+        return
+
+    record_id = int(row["id"])
+    status = review.status_of(row.get("review_status"))
+    st.markdown("**Review**")
+    st.markdown(theme.pill(
+        status, {"approved": "ok", "rejected": "danger"}.get(status, "warn")),
+        unsafe_allow_html=True)
+
+    by = row.get("reviewed_by")
+
+    if isinstance(by, str) and by:
+        st.caption(f"By {by}, {str(row.get('reviewed_at', ''))[:19]} UTC")
+
+    if not auth.can("operate"):
+        st.caption("Operators and admins can approve or reject.")
+        return
+
+    note = st.text_input("Note (optional)", key=f"review_note_{record_id}")
+    approve, reject = st.columns(2)
+    decision = None
+
+    if approve.button("Approve", key=f"approve_{record_id}"):
+        decision = review.APPROVED
+    elif reject.button("Reject", key=f"reject_{record_id}"):
+        decision = review.REJECTED
+
+    if decision:
+        user = auth.current_user() or {}
+
+        try:
+            review.set_status(
+                record_id, decision, user.get("name") or "unknown",
+                role=auth.current_role(), note=note,
+                address=auth.client_address())
+        except review.ReviewError as exc:
+            st.error(str(exc))
+            return
+
+        st.cache_data.clear()
+        st.rerun()

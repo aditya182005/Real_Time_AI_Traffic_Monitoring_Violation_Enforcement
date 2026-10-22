@@ -1,0 +1,5 @@
+{
+  "red_light": 1000,
+  "wrong_way": 1500,
+  "speeding": {"base": 500, "per_10_kmh": 100}
+}

@@ -1,0 +1,14 @@
+{
+  "NH-4-north": {
+    "stop_line_pct": 62,
+    "signal_mode": "lamp",
+    "lamp_roi_pct": [82, 4, 90, 22],
+    "check_speed": true,
+    "speed_line_a_pct": 45,
+    "speed_line_b_pct": 75,
+    "speed_distance_m": 12.5,
+    "speed_limit_kmh": 50,
+    "check_wrong_way": true,
+    "expected_direction": "down"
+  }
+}

@@ -3,13 +3,12 @@ from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
-from app import paths
+from app import fines, integrity, paths
 
 ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = paths.DB_PATH
 
-# Demo amounts only. Replace with applicable rules
-# before using this in any real-world setting.
+# Demo amounts (the defaults in app/fines.py). Set FINES_FILE to use your own.
 RED_LIGHT_FINE = 1000
 WRONG_WAY_FINE = 1500
 BASE_SPEED_FINE = 500
@@ -29,6 +28,17 @@ EXTRA_COLUMNS = {
         "camera_id": "TEXT",
         "plate_text": "TEXT",
         "plate_confidence": "REAL",
+        # Human review (app/review.py)
+        "review_status": "TEXT",
+        "reviewed_by": "TEXT",
+        "reviewed_at": "TEXT",
+        "review_note": "TEXT",
+        # Tamper evidence (app/integrity.py)
+        "evidence_sha256": "TEXT",
+        "crop_sha256": "TEXT",
+        "model_version": "TEXT",
+        "prev_hash": "TEXT",
+        "record_hash": "TEXT",
     },
     "collision_events": {
         "alert_status": "TEXT",
@@ -133,11 +143,13 @@ def setup_database():
 
 
 def calculate_fine(violation_type, speed=None, speed_limit=None):
+    table = fines.load()
+
     if violation_type == "red_light":
-        return RED_LIGHT_FINE
+        return table["red_light"]
 
     if violation_type == "wrong_way":
-        return WRONG_WAY_FINE
+        return table["wrong_way"]
 
     if violation_type == "speeding":
         if speed is None or speed_limit is None:
@@ -149,8 +161,8 @@ def calculate_fine(violation_type, speed=None, speed_limit=None):
         excess = speed - speed_limit
         extra_blocks = int((excess + 9.999999) // 10)
 
-        return BASE_SPEED_FINE + (
-            extra_blocks * EXTRA_SPEED_FINE_PER_10_KMH
+        return table["speeding"]["base"] + (
+            extra_blocks * table["speeding"]["per_10_kmh"]
         )
 
     raise ValueError(f"Unknown violation type: {violation_type}")
@@ -187,9 +199,30 @@ def log_violation(
         return False
 
     timestamp = datetime.now(timezone.utc).isoformat()
+    evidence_path = str(evidence_path) if evidence_path else None
+    crop_path = str(crop_path) if crop_path else None
+    sealed = {
+        "event_key": event_key,
+        "track_id": int(track_id),
+        "violation_type": violation_type,
+        "measured_speed": speed,
+        "speed_limit": speed_limit,
+        "signal_state": signal_state,
+        "fine_amount": fine,
+        "timestamp": timestamp,
+        "source": source,
+        "camera_id": camera_id,
+        "model_version": integrity.model_version(),
+        "evidence_sha256": integrity.sha256_file(evidence_path),
+        "crop_sha256": integrity.sha256_file(crop_path),
+    }
 
     with _connect() as conn:
         _create_table(conn)
+
+        # One writer at a time, so two records never share a predecessor.
+        conn.execute("BEGIN IMMEDIATE")
+        previous = integrity.last_hash(conn)
 
         cursor = conn.execute("""
             INSERT OR IGNORE INTO violation_records (
@@ -206,9 +239,16 @@ def log_violation(
                 crop_path,
                 camera_id,
                 plate_text,
-                plate_confidence
+                plate_confidence,
+                review_status,
+                model_version,
+                evidence_sha256,
+                crop_sha256,
+                prev_hash,
+                record_hash
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    'pending', ?, ?, ?, ?, ?)
         """, (
             event_key,
             int(track_id),
@@ -218,12 +258,17 @@ def log_violation(
             signal_state,
             fine,
             timestamp,
-            str(evidence_path) if evidence_path else None,
+            evidence_path,
             source,
-            str(crop_path) if crop_path else None,
+            crop_path,
             camera_id,
             plate_text,
             plate_confidence,
+            sealed["model_version"],
+            sealed["evidence_sha256"],
+            sealed["crop_sha256"],
+            previous,
+            integrity.chain_hash(previous, sealed),
         ))
 
         conn.commit()

@@ -82,6 +82,7 @@ def _overview(data):
          else "none attempted yet",
          "green" if rate else "white"),
         ("Demo fines", f"₹{analytics.total_fines(violations):,.0f}",
+         f"₹{analytics.approved_fines(violations):,.0f} approved; "
          "not legal fines", "white"),
     ])
 

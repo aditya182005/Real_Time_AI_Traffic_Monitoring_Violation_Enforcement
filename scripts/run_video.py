@@ -56,15 +56,27 @@ def build_parser(add_help=True):
         help="Name stored with every record (default: $CAMERA_ID or CAM-01)."
     )
 
+    parser.add_argument(
+        "--profile", default=None, metavar="NAME",
+        help="Use the stop line, speed lines and other calibration saved "
+             "for a camera in $CAMERAS_FILE (see app/cameras.py). Its "
+             "values replace the options below.")
+
     signal = parser.add_argument_group("stop line and simulated signal")
     signal.add_argument(
         "--stop-line-pct", type=float, default=60,
         help="Stop line position, percent from the top of the frame."
     )
     signal.add_argument(
-        "--signal", type=str.lower, choices=["red", "green", "cycle"],
-        default="red", help="Simulated signal for the whole run."
+        "--signal", type=str.lower, choices=["red", "green", "cycle", "lamp"],
+        default="red", help="Simulated signal for the whole run, or "
+                            "'lamp' to read it from the lamp in the video "
+                            "(needs --lamp-roi)."
     )
+    signal.add_argument(
+        "--lamp-roi", default=None, metavar="X1,Y1,X2,Y2",
+        help="Where the traffic lamp is, in percent of the frame, for "
+             "--signal lamp. Example: 82,4,90,22.")
     signal.add_argument("--red-seconds", type=float, default=10)
     signal.add_argument("--green-seconds", type=float, default=10)
 
@@ -115,11 +127,29 @@ def build_parser(add_help=True):
     return parser
 
 
+def parse_roi(text):
+    """'x1,y1,x2,y2' -> a tuple of four numbers (all zero when not given)."""
+
+    if not text:
+        return (0, 0, 0, 0)
+
+    try:
+        values = tuple(float(v) for v in str(text).split(","))
+    except ValueError:
+        values = ()
+
+    if len(values) != 4:
+        raise SystemExit("--lamp-roi must be four numbers: x1,y1,x2,y2")
+
+    return values
+
+
 def settings_from_args(args):
     return VideoSettings(
         camera_id=args.camera_id,
         stop_line_pct=args.stop_line_pct,
         signal_mode=args.signal,
+        lamp_roi_pct=parse_roi(args.lamp_roi),
         red_seconds=args.red_seconds,
         green_seconds=args.green_seconds,
         check_speed=args.speed,
@@ -178,6 +208,14 @@ def run(args, parser, detector=None, tracker=None, emergency_detector=None,
     """
 
     settings = settings_from_args(args)
+
+    if args.profile:
+        from app import cameras
+
+        try:
+            settings = cameras.settings_for(args.profile, base=settings)
+        except cameras.ProfileError as exc:
+            parser.error(str(exc))
 
     problems = validate_settings(settings)
 

@@ -13,6 +13,10 @@ How Traffic Agent is put together, how data flows through it, and why.
 | Signal priority | `app/emergency/signal_priority.py` | Simulated green override when an emergency vehicle is seen. |
 | Pipeline | `app/video_processor.py` | Runs detect, track, check, draw, record for every frame. Used by the dashboard and the CLIs. |
 | Storage | `app/violation/violation_logger.py`, `app/database/` | SQLite tables and evidence images. |
+| Signal source | `app/violation/signal.py`, `app/violation/lamp.py` | Simulated signal, or red/green read from the lamp in the picture. |
+| Review and integrity | `app/review.py`, `app/integrity.py` | Approve/reject workflow; hashes and a record chain. |
+| Configuration | `app/fines.py`, `app/cameras.py` | Fine table and per-camera profiles from JSON files. |
+| Privacy | `app/privacy.py` | Retention, export and erasure of evidence and plates. |
 | Alerts | `app/alerts/twilio_alert.py` | Opt-in SMS or voice call on a possible collision. |
 | Dashboard | `app/main.py`, `app/ui/` | Streamlit pages, sign-in, roles, theme. |
 | Operations | `app/ui/auth.py`, `app/users.py`, `app/audit.py`, `app/housekeeping.py`, `app/health.py`, `app/ratelimit.py` | Users and roles, audit log, retention, health check, rate limits. |
@@ -46,7 +50,7 @@ Created automatically by `app/violation/violation_logger.py`:
 
 | Table | Holds |
 |---|---|
-| `violation_records` | One row per violation: type, track ID, speed and limit, signal state, fine, timestamp, evidence and crop paths, source, camera, plate text and confidence. |
+| `violation_records` | One row per violation: type, track ID, speed and limit, signal state, fine, timestamp, evidence and crop paths, source, camera, plate text and confidence; review status, reviewer, time and note; evidence hashes, model version, previous hash and record hash. |
 | `collision_events` | Pair of track IDs, evidence, alert status and alert latency. |
 | `priority_events` | Emergency vehicle class, confidence, whether the signal override was applied. |
 | `traffic_density` | Vehicle count per video second. |
@@ -58,8 +62,12 @@ Older databases are upgraded in place: missing columns are added on start.
 
 * **Rules are separate from models.** Violation logic takes boxes and IDs, so
   it is unit tested without YOLO. CI also runs a real YOLO + ByteTrack smoke test.
-* **Signal is simulated.** The camera cannot read a real signal; the app uses a
-  fixed or cycling state (`app/violation/signal.py`) and says so on screen.
+* **Signal source is explicit.** The banner says whether the state is simulated
+  or read from the lamp. Before a lamp has been seen lit, the state is GREEN so
+  no violation can be recorded on a guess.
+* **Records are sealed.** Each violation hashes its fields, evidence and the
+  previous record's hash. Review status and plate text are outside the seal on
+  purpose because they must change (see [PRODUCTION.md](PRODUCTION.md)).
 * **Evidence is drawn after checks and saved from a clean copy for crops**, so
   crops are not covered by boxes.
 * **Emergency model is optional.** Without the weights the app runs normally.
