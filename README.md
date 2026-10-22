@@ -192,6 +192,7 @@ Exact versions are in [`requirements.txt`](requirements.txt).
 ├── tests/                      # Automated tests (pytest; no model weights needed)
 ├── notebooks/                  # Google Colab notebooks for training
 ├── data/
+│   ├── my_media/               #   Your own photos and videos (they appear in the app)
 │   ├── samples/                #   Pictures for a quick check (+ README, credits)
 │   ├── videos/                 #   traffic.mp4 and the all-checks demo video
 │   ├── images/                 #   test image used by scripts/check_setup.py
@@ -399,6 +400,7 @@ python scripts/evaluate.py --video clip.mp4 --truth truth.csv --speed --collisio
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | All settings in `.env` |
 | [docs/TRAINING.md](docs/TRAINING.md) | Build the dataset and train the emergency model |
 | [docs/EVALUATION.md](docs/EVALUATION.md) | What is measured, how, and what the numbers mean |
+| [docs/CHECKING_OUTPUTS.md](docs/CHECKING_OUTPUTS.md) | Step-by-step checks with photos and videos, and the outputs to expect |
 | [docs/PRODUCTION.md](docs/PRODUCTION.md) | Review workflow, record integrity, privacy, what still needs an authority |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker, HTTPS, sign-in, backups, security |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common errors and fixes |

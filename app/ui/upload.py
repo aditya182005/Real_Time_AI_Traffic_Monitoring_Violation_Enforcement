@@ -19,7 +19,7 @@ from app.analysis import (
 )
 from app.annotate import draw_calibration
 from app.detection.emergency_detector import EmergencyDetector
-from app.ui import auth, theme
+from app.ui import auth, project_media, theme
 from app.ui.data import ROOT
 from app.ui.helpers import csv_bytes, show_df, show_image
 
@@ -121,6 +121,16 @@ def _images_tab():
         key="image_files",
         help="JPG, PNG, BMP or WebP. Up to 200 MB each.",
     )
+
+    project_images = project_media.images()
+    picked = st.multiselect(
+        "Or pick pictures already in the project",
+        list(project_images), key="project_images",
+        help="Sample pictures are in data/samples. Put your own in "
+             "data/my_media and they appear here.")
+    files = list(files or []) + [
+        project_media.ProjectFile(label, project_images[label])
+        for label in picked if label in project_images]
 
     left, right = st.columns(2)
     conf = left.slider("Detection confidence", 0.10, 0.90, 0.35, 0.05,
@@ -328,6 +338,62 @@ def _stage_video(uploaded):
     return staged
 
 
+NO_CHOICE = "(none)"
+
+
+def _stage_project_video(path):
+    key = f"project:{path}:{path.stat().st_size}"
+    staged = st.session_state.get("staged_video")
+
+    if staged and staged["key"] == key:
+        return staged
+
+    properties = _read_properties(path)
+
+    if properties is None:
+        st.error(f"{path.name} could not be read. Try exporting it as an "
+                 "MP4 (H.264) file.")
+        return None
+
+    staged = {"key": key, "name": path.name, **properties}
+    st.session_state["staged_video"] = staged
+    st.session_state.pop("video_result", None)
+
+    return staged
+
+
+def _apply_demo_settings():
+    """Button callback: set the controls the demo video was made for."""
+
+    state = st.session_state
+    state.update(project_media.DEMO_SETTINGS)
+    state["signal_mode"] = "Cycle red and green"
+    state["direction"] = next(
+        label for label, value in DIRECTIONS.items() if value == "down")
+
+    if EmergencyDetector.available():
+        state["video_emergency"] = True
+
+
+def _expected_panel(name):
+    """For the bundled demo video: what the run should find."""
+
+    if name != project_media.DEMO_VIDEO:
+        return
+
+    with st.container(border=True):
+        st.markdown("**Expected results for this demo video**")
+        show_df(pd.DataFrame(
+            project_media.DEMO_EXPECTED,
+            columns=["What", "Count", "Details"]))
+        st.caption("Pressing the button sets the signal to cycle 6 s red / "
+                   "6 s green, stop line 60%, speed lines 45% and 75% with "
+                   "10 m between them and a 40 km/h limit, wrong way "
+                   "'down', collisions on.")
+        st.button("Apply the demo settings", key="apply_demo",
+                  on_click=_apply_demo_settings)
+
+
 def _stage_sample():
     key = f"sample:{SAMPLE_VIDEO.stat().st_size}"
     staged = st.session_state.get("staged_video")
@@ -533,11 +599,29 @@ def _video_tab():
 
         use_sample = st.session_state.get("sample_selected", False)
 
-    if uploaded is None and not use_sample:
-        st.info("Upload a video to begin. MP4 (H.264) works best.")
+    project_videos = project_media.videos()
+    choice = NO_CHOICE
+
+    if uploaded is None and project_videos:
+        choice = st.selectbox(
+            "Or pick a video already in the project",
+            [NO_CHOICE, *project_videos], key="project_video",
+            help="Bundled videos are in data/videos. Put your own in "
+                 "data/my_media and they appear here.")
+
+    picked_path = project_videos.get(choice)
+
+    if uploaded is None and picked_path is None and not use_sample:
+        st.info("Upload a video, or pick one from the project, to begin. "
+                "MP4 (H.264) works best.")
         return
 
-    staged = _stage_video(uploaded) if uploaded is not None else _stage_sample()
+    if uploaded is not None:
+        staged = _stage_video(uploaded)
+    elif picked_path is not None:
+        staged = _stage_project_video(picked_path)
+    else:
+        staged = _stage_sample()
 
     if staged is None:
         return
@@ -551,6 +635,8 @@ def _video_tab():
         + theme.pill(f"{duration:.0f} seconds", "info"),
         unsafe_allow_html=True,
     )
+
+    _expected_panel(staged["name"])
 
     preview_col, settings_col = st.columns([3, 2])
 
