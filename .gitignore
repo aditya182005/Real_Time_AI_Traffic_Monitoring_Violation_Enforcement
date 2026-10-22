@@ -14,3 +14,6 @@ outputs/
 users.json
 logs/
 data/emergency_vehicle_new/
+
+# Your own test clips (large, and may not be yours to share)
+clips/
