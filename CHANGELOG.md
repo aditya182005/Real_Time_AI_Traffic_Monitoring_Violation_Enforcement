@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Analyze page can pick photos and videos from the project folder (`data/my_media`, `data/samples`, `data/videos`), shows the expected results for the demo video and can apply its settings.
+* New `docs/CHECKING_OUTPUTS.md`.
 * Human review of violations (pending / approved / rejected) with audit trail.
 * Tamper-evident records: evidence hashes, model version and a hash chain;
   `python -m app.integrity verify` and an Admin check.
