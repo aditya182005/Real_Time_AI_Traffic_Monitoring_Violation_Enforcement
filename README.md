@@ -184,7 +184,9 @@ Exact versions are in [`requirements.txt`](requirements.txt).
 │   ├── footage_report.py       #   Batch-run real clips and report false alarms / hits
 │   ├── train_emergency.py      #   Train and install the emergency model
 │   ├── build_emergency_dataset.py  # Merge downloaded datasets into one
-│   ├── check_emergency_model.py    # False-alarm / cross-dataset check
+│   ├── check_emergency_model.py    # False-alarm check on real held-out pictures
+│   ├── fetch_coco_negatives.py #   Real pictures of ordinary cars/trucks/buses
+│   ├── extract_frames.py       #   Pictures from your own videos
 │   ├── make_demo_video.py      #   Rebuild the demo video and its truth file
 │   ├── init_database.py        #   Create the database tables
 │   └── manual_checks/          #   Hand-run demos (need models and video)
@@ -196,7 +198,6 @@ Exact versions are in [`requirements.txt`](requirements.txt).
 │   ├── samples/                #   Pictures for a quick check (+ README, credits)
 │   ├── videos/                 #   traffic.mp4 and the all-checks demo video
 │   ├── images/                 #   test image used by scripts/check_setup.py
-│   └── emergency_vehicle/      #   Cleaned training dataset (YOLO format)
 ├── models/                     # Put emergency_vehicle.pt here (not in git)
 ├── deploy/                     # nginx, Caddy, fail2ban, oauth2-proxy examples
 ├── docs/                       # Documentation (see below)
@@ -330,8 +331,8 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) (missing files, the
 
 | Metric | How it is measured | Result |
 |---|---|---|
-| Emergency-vehicle detection, mAP@0.5 | `scripts/train_emergency.py` scores the weights on held-out test pictures | **0.95** overall; 0.94 ambulance, 0.98 fire truck, 0.92 police car (precision 0.94, recall 0.91) |
-| Emergency-vehicle false alarms | `scripts/check_emergency_model.py` on pictures with no emergency vehicle | Not measured on real footage yet |
+| Emergency-vehicle detection, mAP@0.5 | `scripts/train_emergency.py` scores the weights on held-out test pictures | Old model: 0.95 overall, but it flagged ordinary trucks and cars on real footage. **Being retrained** with real negatives; see [docs/TRAINING.md](docs/TRAINING.md) |
+| Emergency-vehicle false alarms | `scripts/check_emergency_model.py --negatives DIR` on real ordinary pictures kept out of training | Measure after retraining (target 5% or less) |
 | Vehicle detection (cars, buses, ...) | Uses the pretrained COCO YOLOv8n | Not evaluated by this project |
 | Tracking (ID switches) | Needs hand-labelled tracks | Not measured |
 | Violation detection (precision / recall) | `scripts/evaluate.py` against labelled events | Run on the demo video and your own clips (see below) |

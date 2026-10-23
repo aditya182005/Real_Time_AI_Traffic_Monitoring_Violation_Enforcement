@@ -1,8 +1,24 @@
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODEL_PATH = ROOT / "models" / "emergency_vehicle.pt"
 DEFAULT_CONFIDENCE = 0.65
+
+
+def configured_confidence():
+    """``EMERGENCY_CONFIDENCE`` (0.05 to 0.99), else the default.
+
+    Raise it (for example 0.85) to flag fewer ordinary trucks and cars as
+    emergency vehicles, at the cost of missing some real ones.
+    """
+
+    try:
+        value = float(os.getenv("EMERGENCY_CONFIDENCE", ""))
+    except ValueError:
+        return DEFAULT_CONFIDENCE
+
+    return min(0.99, max(0.05, value))
 
 
 class EmergencyDetector:
@@ -13,8 +29,7 @@ class EmergencyDetector:
     ``models/emergency_vehicle.pt``.
     """
 
-    def __init__(self, model_path=DEFAULT_MODEL_PATH,
-                 confidence=DEFAULT_CONFIDENCE):
+    def __init__(self, model_path=DEFAULT_MODEL_PATH, confidence=None):
         model_path = Path(model_path)
 
         if not model_path.exists():
@@ -25,7 +40,8 @@ class EmergencyDetector:
         from ultralytics import YOLO
 
         self.model = YOLO(str(model_path))
-        self.confidence = confidence
+        self.confidence = (
+            configured_confidence() if confidence is None else confidence)
 
     @staticmethod
     def available(model_path=DEFAULT_MODEL_PATH):

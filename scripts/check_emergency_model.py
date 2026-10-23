@@ -12,10 +12,19 @@ It reports three things, in plain words:
 3. MISSED LABELS: pictures kept in <dataset>/_review/missing_labels, which
    all contain an emergency vehicle. The share the model finds shows how it
    copes with a different source of pictures.
+
+With ``--negatives DIR`` it also tests a folder of REAL pictures with no
+emergency vehicle that were never used for training (cars, trucks, buses on
+real roads), and says which wrong class each false alarm picked, for example
+"truck -> fire_truck". This is the honest check for the "every truck is a fire
+truck" problem; keep that folder out of training.
 """
+
+TARGET_FALSE_ALARM_SHARE = 0.05
 
 import argparse
 import sys
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -81,6 +90,37 @@ def _ultralytics_detector(weights, conf):
     return run
 
 
+def _ultralytics_classifier(weights, conf):
+    """Per picture, the ``(class_name, confidence)`` of every detection."""
+
+    from ultralytics import YOLO
+
+    model = YOLO(str(weights))
+
+    def run(images):
+        found = []
+
+        for result in model.predict(source=[str(p) for p in images],
+                                    conf=conf, verbose=False, stream=True):
+            found.append([(model.names[int(b.cls[0])], float(b.conf[0]))
+                          for b in result.boxes])
+
+        return found
+
+    return run
+
+
+def false_alarm_summary(images, found):
+    """``(flagged_pictures, by_class, worst)`` from per-picture detections."""
+
+    flagged = [(img, det) for img, det in zip(images, found) if det]
+    by_class = Counter(max(det, key=lambda d: d[1])[0]
+                       for _, det in flagged)
+    worst = sorted(flagged, key=lambda f: -max(d[1] for d in f[1]))
+
+    return len(flagged), by_class, worst
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--weights", default=str(WEIGHTS))
@@ -88,12 +128,15 @@ def build_parser():
     parser.add_argument("--split", default="test")
     parser.add_argument("--conf", type=float, default=0.25,
                         help="confidence needed to count as a detection")
+    parser.add_argument("--negatives", default=None, metavar="DIR",
+                        help="a folder of real pictures with no emergency "
+                             "vehicle that were NOT used for training")
 
     return parser
 
 
 def main(argv=None, detector_factory=_ultralytics_detector,
-         evaluator=None):
+         evaluator=None, classifier_factory=_ultralytics_classifier):
     args = build_parser().parse_args(argv)
 
     if not Path(args.weights).is_file():
@@ -141,6 +184,33 @@ def main(argv=None, detector_factory=_ultralytics_detector,
               f"({100 * flagged / total:.0f}%).")
     else:
         print("\n3. Missed labels: no _review/missing_labels folder found.")
+
+    if args.negatives:
+        images = [p for p in sorted(Path(args.negatives).rglob("*"))
+                  if p.suffix.lower() in IMAGE_TYPES]
+
+        if not images:
+            print(f"\n4. Real negatives: no pictures in {args.negatives}.")
+        else:
+            found = classifier_factory(args.weights, args.conf)(images)
+            count, by_class, worst = false_alarm_summary(images, found)
+            share = count / len(images)
+            print(f"\n4. Real negatives: {count} of {len(images)} pictures "
+                  f"with no emergency vehicle were flagged "
+                  f"({100 * share:.1f}%) at confidence {args.conf}.")
+
+            for name, number in by_class.most_common():
+                print(f"     wrongly called {name}: {number}")
+
+            for image, det in worst[:10]:
+                top = max(det, key=lambda d: d[1])
+                print(f"     {image.name}: {top[0]} {top[1]:.2f}")
+
+            verdict = "GOOD ENOUGH" if share <= TARGET_FALSE_ALARM_SHARE \
+                else "TOO MANY FALSE ALARMS"
+            print(f"   Target: at most {100 * TARGET_FALSE_ALARM_SHARE:.0f}%"
+                  f" -> {verdict}. Raise --conf or add more real negatives "
+                  "and retrain if it is too high.")
 
     print("\nPictures from your own cameras are the final test.")
 

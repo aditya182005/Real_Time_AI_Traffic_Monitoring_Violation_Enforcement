@@ -70,6 +70,53 @@ class CheckTests(unittest.TestCase):
         self.assertIn("in 3 of 4 pictures", out)
         self.assertIn("mAP@0.5 0.90", out)
 
+    def run_negatives(self, per_picture, count=20):
+        with tempfile.TemporaryDirectory() as root:
+            data, weights = make(root)
+            neg = Path(root) / "real"
+            neg.mkdir()
+
+            for i in range(count):
+                (neg / f"r{i}.jpg").write_bytes(b"x")
+
+            def classifier(w, conf):
+                return lambda images: [per_picture.get(p.stem, [])
+                                       for p in images]
+
+            out = io.StringIO()
+
+            with contextlib.redirect_stdout(out):
+                cm.main(["--weights", str(weights), "--data", str(data),
+                         "--negatives", str(neg)],
+                        detector_factory=lambda w, c: (lambda im: [0] * len(im)),
+                        evaluator=lambda w, d, split="test": {
+                            "mAP50": 1, "precision": 1, "recall": 1},
+                        classifier_factory=classifier)
+
+        return out.getvalue()
+
+    def test_real_negatives_name_the_wrong_class(self):
+        out = self.run_negatives({"r0": [("fire_truck", 0.9)],
+                                  "r1": [("fire_truck", 0.7),
+                                         ("police_car", 0.5)],
+                                  "r2": [("police_car", 0.6)]})
+
+        self.assertIn("3 of 20 pictures with no emergency vehicle", out)
+        self.assertIn("(15.0%)", out)
+        self.assertIn("wrongly called fire_truck: 2", out)
+        self.assertIn("wrongly called police_car: 1", out)
+        self.assertIn("r0.jpg: fire_truck 0.90", out)
+        self.assertIn("TOO MANY FALSE ALARMS", out)
+
+    def test_real_negatives_pass_when_few_are_flagged(self):
+        out = self.run_negatives({"r0": [("police_car", 0.4)]})
+
+        self.assertIn("(5.0%)", out)
+        self.assertIn("GOOD ENOUGH", out)
+
+    def test_empty_negatives_folder_is_reported(self):
+        self.assertIn("no pictures in", self.run_negatives({}, count=0))
+
     def test_missing_files_are_clean_errors(self):
         with contextlib.redirect_stderr(io.StringIO()) as err:
             self.assertEqual(cm.main(["--weights", "nope.pt"]), 1)

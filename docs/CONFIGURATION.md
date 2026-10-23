@@ -42,6 +42,7 @@ and edit it. `.env` is git-ignored; never commit it.
 | `FINES_FILE` | empty | JSON fine table. Blank uses the demo amounts. See `deploy/fines.example.json`. |
 | `CAMERAS_FILE` | empty | JSON of per-camera calibration, used with `--profile NAME`. See `deploy/cameras.example.json`. |
 | `EVIDENCE_RETENTION_DAYS` | `0` | Delete evidence images, crops and plate text older than this. `0` keeps everything. |
+| `EMERGENCY_CONFIDENCE` | `0.65` | Confidence needed to call something an emergency vehicle. Raise (0.85) if ordinary trucks or cars are flagged. |
 | `MODEL_VERSION` | derived | Label stored with each violation. |
 
 See [PRODUCTION.md](PRODUCTION.md).
