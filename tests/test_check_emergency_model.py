@@ -30,6 +30,24 @@ def make(root):
     return base / "data.yaml", weights
 
 
+class ChunkTests(unittest.TestCase):
+    def test_predicts_in_small_chunks_with_explicit_batch(self):
+        calls = []
+
+        class Model:
+            def predict(self, source, **kwargs):
+                calls.append((len(source), kwargs))
+                return [object() for _ in source]
+
+        results = list(cm.predict_in_chunks(Model(), [f"{i}.jpg" for i in range(40)], 0.3))
+
+        self.assertEqual(len(results), 40)
+        self.assertEqual([n for n, _ in calls], [16, 16, 8])
+        self.assertTrue(all(k["batch"] == 4 and k["conf"] == 0.3 and not k.get("stream")
+                            for _, k in calls))
+        self.assertEqual(list(cm.predict_in_chunks(Model(), [], 0.3)), [])
+
+
 class CheckTests(unittest.TestCase):
 
     def run_main(self, detections):

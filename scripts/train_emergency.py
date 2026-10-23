@@ -109,7 +109,7 @@ def _ultralytics_evaluator(weights, data, split="val"):
     from ultralytics import YOLO
 
     metrics = YOLO(str(weights)).val(data=str(data), split=split,
-                                     verbose=False).box
+                                     batch=8, verbose=False).box
 
     scores = {
         "precision": float(metrics.mp),
