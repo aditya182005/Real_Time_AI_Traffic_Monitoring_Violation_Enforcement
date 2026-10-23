@@ -73,6 +73,25 @@ def share_flagged(images, detector):
     return sum(1 for c in counts if c > 0), len(counts)
 
 
+CHUNK = 16
+
+
+def predict_in_chunks(model, images, conf, chunk=CHUNK):
+    """Yield one result per picture, ``chunk`` pictures at a time.
+
+    Handing Ultralytics a long list at once can run a GPU out of memory (the
+    batch size is inherited from training); small chunks with an explicit
+    batch size cannot.
+    """
+
+    images = [str(p) for p in images]
+
+    for start in range(0, len(images), chunk):
+        yield from model.predict(
+            source=images[start:start + chunk], conf=conf, batch=4,
+            imgsz=640, verbose=False)
+
+
 def _ultralytics_detector(weights, conf):
     from ultralytics import YOLO
 
@@ -81,8 +100,7 @@ def _ultralytics_detector(weights, conf):
     def run(images):
         counts = []
 
-        for result in model.predict(source=[str(p) for p in images],
-                                    conf=conf, verbose=False, stream=True):
+        for result in predict_in_chunks(model, images, conf):
             counts.append(len(result.boxes))
 
         return counts
@@ -100,8 +118,7 @@ def _ultralytics_classifier(weights, conf):
     def run(images):
         found = []
 
-        for result in model.predict(source=[str(p) for p in images],
-                                    conf=conf, verbose=False, stream=True):
+        for result in predict_in_chunks(model, images, conf):
             found.append([(model.names[int(b.cls[0])], float(b.conf[0]))
                           for b in result.boxes])
 
