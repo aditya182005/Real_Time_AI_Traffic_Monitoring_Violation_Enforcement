@@ -32,7 +32,10 @@ def check_dataset(data_yaml=DATA_YAML):
     data_yaml = Path(data_yaml)
 
     if not data_yaml.is_file():
-        raise FileNotFoundError(f"Dataset file not found: {data_yaml}")
+        raise FileNotFoundError(
+            f"Dataset file not found: {data_yaml}. Build one with "
+            "scripts/build_emergency_dataset.py or the Colab notebook "
+            "(see docs/TRAINING.md): the project no longer ships a dataset.")
 
     counts = {}
 

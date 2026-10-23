@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+* Fix for trucks flagged as fire trucks and cars as police cars: the bundled emergency dataset is removed; new Colab notebook trains on real-world datasets plus real street negatives (COCO, your own frames), checks for hidden emergency vehicles, and tests on held-out real pictures.
+* New `--negatives` option in `build_emergency_dataset.py`, `fetch_coco_negatives.py`, `extract_frames.py`, `check_emergency_model.py --negatives`, and `EMERGENCY_CONFIDENCE`.
+* Removed the CPU training workflow (use Colab).
 * Analyze page can pick photos and videos from the project folder (`data/my_media`, `data/samples`, `data/videos`), shows the expected results for the demo video and can apply its settings.
 * New `docs/CHECKING_OUTPUTS.md`.
 * Human review of violations (pending / approved / rejected) with audit trail.

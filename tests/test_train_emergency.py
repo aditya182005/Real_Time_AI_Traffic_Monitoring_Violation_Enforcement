@@ -56,11 +56,11 @@ class DatasetTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "No images"):
                 te.check_dataset(make_dataset(root, val=0))
 
-    def test_the_real_dataset_in_the_repo_is_complete(self):
-        counts = te.check_dataset()
-
-        self.assertGreater(counts["train"], 100)
-        self.assertGreater(counts["val"], 10)
+    def test_a_missing_dataset_says_how_to_build_one(self):
+        with tempfile.TemporaryDirectory() as root:
+            with self.assertRaisesRegex(
+                    FileNotFoundError, "build_emergency_dataset"):
+                te.check_dataset(Path(root) / "data.yaml")
 
 
 class WeightsTests(unittest.TestCase):
@@ -281,8 +281,12 @@ class EvaluationTests(unittest.TestCase):
 
 class NotebookTests(unittest.TestCase):
 
-    def test_the_colab_notebook_is_valid_and_runs_the_real_script(self):
+    def test_the_colab_notebook_uses_real_scripts_and_options(self):
         import json
+        import build_emergency_dataset as bd
+        import check_emergency_model as cm
+        import extract_frames as ef
+        import fetch_coco_negatives as fc
 
         path = Path(te.__file__).resolve().parent.parent / "notebooks" / \
             "train_emergency_colab.ipynb"
@@ -290,31 +294,34 @@ class NotebookTests(unittest.TestCase):
         source = "\n".join("".join(c["source"]) for c in notebook["cells"])
 
         self.assertEqual(notebook["nbformat"], 4)
-        self.assertIn("python scripts/train_emergency.py", source)
-        self.assertIn("files.download('models/emergency_vehicle.pt')", source)
-
-        # Every option the notebook passes must exist in the script.
-        parser = te.build_parser()
-        parser.parse_args(["--epochs", "60", "--device", "0", "--batch", "-1"])
-
-
-    def test_the_new_data_notebook_uses_real_scripts_and_options(self):
-        import json
-        import build_emergency_dataset as bd
-
-        path = Path(te.__file__).resolve().parent.parent / "notebooks" / \
-            "train_emergency_colab_new_data.ipynb"
-        notebook = json.loads(path.read_text())
-        source = "\n".join("".join(c["source"]) for c in notebook["cells"])
-
         self.assertIn("python scripts/build_emergency_dataset.py", source)
         self.assertIn("python scripts/train_emergency.py --data", source)
+        self.assertIn("python scripts/fetch_coco_negatives.py", source)
+        self.assertIn("python scripts/check_emergency_model.py", source)
+        self.assertIn("python scripts/extract_frames.py", source)
+        self.assertIn("files.download('models/emergency_vehicle.pt')", source)
         self.assertIn('supervision>=0.20,<0.31', source)
 
+        # Every option the notebook passes must exist in the script it calls.
         te.build_parser().parse_args(
-            ["--data", "x.yaml", "--epochs", "80", "--device", "0",
+            ["--data", "x.yaml", "--epochs", "60", "--device", "0",
              "--batch", "-1", "--report", "emergency_scores.json"])
-        bd.build_parser().parse_args(["--source", "a", "--source", "b:fire_truck"])
+        args = bd.build_parser().parse_args(
+            ["--source", "a", "--source", "b:fire_truck",
+             "--negatives", "n", "--negatives", "m", "--max-negatives", "1500"])
+        self.assertEqual(args.negatives, ["n", "m"])
+        cm.build_parser().parse_args(
+            ["--data", "x.yaml", "--negatives", "held", "--conf", "0.5"])
+
+        # The notebook must not depend on the removed bundled dataset.
+        self.assertNotIn("include-existing", source)
+        self.assertNotIn("emergency_vehicle_new", source)
+
+        # The held-out negatives must never be part of the training folder.
+        self.assertIn("--negatives data/negatives_train", source)
+        self.assertNotIn("--negatives data/negatives_heldout", source.split(
+            "check_emergency_model.py")[0])
 
         # The forced class the notebook uses must be one the script knows.
         self.assertIn("fire_truck", bd.CLASSES)
+        self.assertTrue(callable(ef.extract) and callable(fc.select))

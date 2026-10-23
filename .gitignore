@@ -13,7 +13,11 @@ outputs/
 
 users.json
 logs/
-data/emergency_vehicle_new/
 
 # Your own test clips (large, and may not be yours to share)
 clips/
+
+# Datasets are built by scripts/build_emergency_dataset.py (see docs/TRAINING.md)
+/data/emergency_vehicle/
+/data/negatives*/
+/data/.coco_cache/

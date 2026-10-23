@@ -165,6 +165,54 @@ class BuildTests(unittest.TestCase):
 
             self.assertEqual(total, 1)
 
+    def test_negatives_folder_adds_empty_label_pictures(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = make_source(tmp, "a", ["ambulance"],
+                              {f"p{i}": [f"0 {BOX}"] for i in range(20)})
+            neg = Path(tmp) / "neg" / "nested"
+            neg.mkdir(parents=True)
+
+            for i in range(30):
+                (neg / f"car{i}.jpg").write_bytes(f"neg{i}".encode())
+
+            (neg / "notes.txt").write_text("not a picture")
+            out, report = self.build(
+                tmp, [src], negatives=[Path(tmp) / "neg"])
+
+            total = sum(s["negatives"] for s in report["splits"].values())
+            labels = [p for p in (out / "labels").rglob("*.txt")
+                      if "neg_" in p.name]
+
+            self.assertEqual(total, 30)
+            self.assertEqual(len(labels), 30)
+            self.assertTrue(all(not p.read_text() for p in labels))
+            self.assertEqual(report["sources"]["negatives"]["added"], 30)
+
+    def test_negatives_can_be_capped_and_missing_folder_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = make_source(tmp, "a", ["ambulance"],
+                              {f"p{i}": [f"0 {BOX}"] for i in range(10)})
+            neg = Path(tmp) / "neg"
+            neg.mkdir()
+
+            for i in range(30):
+                (neg / f"c{i}.jpg").write_bytes(f"n{i}".encode())
+
+            _, report = self.build(
+                tmp, [src], negatives=[neg, Path(tmp) / "absent"],
+                max_negatives=5)
+
+            self.assertEqual(sum(s["negatives"]
+                                 for s in report["splits"].values()), 5)
+
+    def test_negatives_alone_with_a_source_cli(self):
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(bd.main(["--output", str(Path(tmp) / "o")]), 1)
+
     def test_too_few_negatives_is_warned_about(self):
         import contextlib
         import io
@@ -178,7 +226,7 @@ class BuildTests(unittest.TestCase):
             with contextlib.redirect_stdout(out):
                 bd.print_report(report)
 
-        self.assertIn("flags ordinary cars and vans", out.getvalue())
+        self.assertIn("flags ordinary cars, trucks and vans", out.getvalue())
 
     def test_output_is_a_valid_dataset_for_training(self):
         import train_emergency as te

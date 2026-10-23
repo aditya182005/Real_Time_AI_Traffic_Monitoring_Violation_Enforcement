@@ -19,6 +19,10 @@ What it does, so the result can be trusted:
   it might hold an unlabelled emergency vehicle.
 * Exact duplicate images are removed, polygons become boxes, and bad boxes
   are discarded.
+* ``--negatives DIR`` (repeatable) adds ordinary pictures with NO emergency
+  vehicle (cars, trucks, buses in real streets). They are the cure for a
+  model that calls every truck a fire truck and every car a police car; see
+  scripts/fetch_coco_negatives.py and scripts/extract_frames.py.
 * Everything is re-split 80/10/10 *by original photo*, so augmented copies of
   one photo never sit in both train and test (that would inflate the scores).
 """
@@ -240,7 +244,33 @@ def load_source(folder, forced_class, tag, stats):
             yield f"{tag}/{photo_key(image.stem)}", image, rows
 
 
-def build(sources, output, seed=0, val=0.1, test=0.1, include=None):
+def load_negatives(folders, limit=None, seed=0):
+    """Pictures with no emergency vehicle: ``(group, path, [])`` items.
+
+    Folders are searched recursively. ``limit`` keeps a random sample.
+    """
+
+    found = []
+
+    for folder in folders:
+        folder = Path(folder)
+
+        if not folder.is_dir():
+            print(f"SKIPPED negatives folder {folder}: not found")
+            continue
+
+        found.extend(sorted(
+            p for p in folder.rglob("*")
+            if p.is_file() and p.suffix.lower() in IMAGE_TYPES))
+
+    if limit is not None and len(found) > limit:
+        found = random.Random(seed).sample(found, limit)
+
+    return [(f"neg/{photo_key(p.stem)}", p, []) for p in found]
+
+
+def build(sources, output, seed=0, val=0.1, test=0.1, include=None,
+          negatives=(), max_negatives=None):
     output = Path(output)
     sources = list(sources)
     stats = defaultdict(lambda: {"dropped_unsure": 0, "bad_rows": 0})
@@ -283,6 +313,13 @@ def build(sources, output, seed=0, val=0.1, test=0.1, include=None):
                                      [float(v) for v in parts[1:]]))
 
                 items.append((f"{tag}/{photo_key(image.stem)}", image, rows))
+
+    extra = load_negatives(negatives, max_negatives, seed)
+
+    if extra:
+        stats["negatives"]["folder"] = ", ".join(str(n) for n in negatives)
+        stats["negatives"]["added"] = len(extra)
+        items.extend(extra)
 
     if not items:
         raise ValueError(
@@ -406,8 +443,8 @@ def print_report(report):
         if info["images"] and info["negatives"] < 0.05 * info["images"]:
             print(f"WARNING: only {info['negatives']} of {info['images']} "
                   f"{split} pictures have no emergency vehicle. A model "
-                  "trained like this flags ordinary cars and vans; add "
-                  "negatives (--include-existing data/emergency_vehicle).")
+                  "trained like this flags ordinary cars, trucks and vans; add "
+                  "real negatives (--negatives DIR).")
 
     for split, info in report["splits"].items():
         for c in CLASSES:
@@ -418,10 +455,17 @@ def print_report(report):
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--source", action="append", required=True,
+    parser.add_argument("--source", action="append", default=[],
                         help="a downloaded YOLO dataset folder (repeatable)")
+    parser.add_argument("--negatives", action="append", default=[],
+                        metavar="DIR",
+                        help="a folder of pictures with NO emergency "
+                             "vehicle, for example from "
+                             "fetch_coco_negatives.py (repeatable)")
+    parser.add_argument("--max-negatives", type=int, default=None,
+                        help="use at most this many of the negatives")
     parser.add_argument("--output", default=str(ROOT / "data" /
-                                                "emergency_vehicle_new"))
+                                                "emergency_vehicle"))
     parser.add_argument("--include-existing", default=None, metavar="DIR",
                         help="also add the dataset already in the repo, "
                              "for example data/emergency_vehicle")
@@ -433,9 +477,16 @@ def build_parser():
 def main(argv=None):
     args = build_parser().parse_args(argv)
 
+    if not args.source and not args.include_existing:
+        print("Give at least one --source (a dataset with emergency "
+              "vehicles).", file=sys.stderr)
+        return 1
+
     try:
         report = build(args.source, args.output, seed=args.seed,
-                       include=args.include_existing)
+                       include=args.include_existing,
+                       negatives=args.negatives,
+                       max_negatives=args.max_negatives)
     except (OSError, ValueError) as exc:
         print(f"Cannot build the dataset: {exc}", file=sys.stderr)
         return 1
