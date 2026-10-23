@@ -33,6 +33,12 @@ def coco(images):
 
 
 class CocoSelectionTests(unittest.TestCase):
+    def test_annotation_and_image_names_follow_the_split(self):
+        self.assertEqual(fc.annotation_names("train"),
+                         ("instances_train2017.json", "captions_train2017.json"))
+        self.assertIn("/train2017/", fc.IMAGE_URL.format(split="train", name="x"))
+        self.assertIn("/val2017/", fc.IMAGE_URL.format(split="val", name="x"))
+
     def test_emergency_captions_are_excluded(self):
         inst, caps = coco({
             1: ([3], "a red car on a street"),

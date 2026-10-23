@@ -5,9 +5,11 @@
 These are *negatives* for the emergency model: pictures that must NOT be
 flagged. A model trained only on emergency vehicles tends to call every truck
 a fire truck and every car a police car, because it has never been shown
-ordinary ones in real scenes. This takes them from the COCO 2017 validation
-set (about 5,000 photos; the annotations are CC BY 4.0, the photos come from
-Flickr under various licences, so use them for training, not redistribution).
+ordinary ones in real scenes. This takes them from COCO 2017 (the annotations
+are CC BY 4.0, the photos come from Flickr under various licences, so use them
+for training, not redistribution). The default is the large "train" split
+(tens of thousands of vehicle photos); the 5,000-photo "val" split has only a
+few hundred clear street scenes, too few for training plus a held-out test.
 
 How it picks pictures:
 
@@ -18,7 +20,7 @@ How it picks pictures:
   fire trucks and ambulances.
 
 Needs internet (about 250 MB for the annotations, then one small file per
-picture). Run it in Colab or on a normal computer, not behind a firewall.
+picture) and about 4 GB of memory to read the training annotations. Run it in Colab or on a normal computer, not behind a firewall.
 Even so, glance through the folder: a few emergency vehicles can still slip
 through, and the notebook has a step that shows suspicious ones.
 """
@@ -27,6 +29,7 @@ import argparse
 import json
 import random
 import re
+import shutil
 import sys
 import urllib.request
 import zipfile
@@ -36,7 +39,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 ANNOTATIONS_URL = ("http://images.cocodataset.org/annotations/"
                    "annotations_trainval2017.zip")
-IMAGE_URL = "http://images.cocodataset.org/val2017/{name}"
+IMAGE_URL = "http://images.cocodataset.org/{split}2017/{name}"
 CAR, BUS, TRUCK = 3, 6, 8
 VEHICLES = {CAR, BUS, TRUCK}
 EXCLUDE_WORDS = re.compile(
@@ -116,23 +119,38 @@ def _download(url, target):
         return False
 
 
-def load_annotations(cache):
+def annotation_names(split):
+    return (f"instances_{split}2017.json", f"captions_{split}2017.json")
+
+
+def load_annotations(cache, split="train"):
     cache = Path(cache)
     cache.mkdir(parents=True, exist_ok=True)
-    names = ("instances_val2017.json", "captions_val2017.json")
+    names = annotation_names(split)
 
     if not all((cache / n).is_file() for n in names):
         archive = cache / "annotations_trainval2017.zip"
-        print("Downloading COCO annotations (about 250 MB) ...", flush=True)
 
-        if not _download(ANNOTATIONS_URL, archive):
-            raise OSError("could not download the COCO annotations")
+        if not archive.is_file():
+            print("Downloading COCO annotations (about 250 MB) ...",
+                  flush=True)
+
+            if not _download(ANNOTATIONS_URL, archive):
+                raise OSError("could not download the COCO annotations")
 
         with zipfile.ZipFile(archive) as zf:
             for name in names:
-                (cache / name).write_bytes(zf.read(f"annotations/{name}"))
+                with zf.open(f"annotations/{name}") as src, \
+                        open(cache / name, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
 
-    return [json.loads((cache / n).read_text()) for n in names]
+    loaded = []
+
+    for name in names:
+        with open(cache / name, encoding="utf-8") as handle:
+            loaded.append(json.load(handle))
+
+    return loaded
 
 
 def main(argv=None):
@@ -145,29 +163,39 @@ def main(argv=None):
                         help="share of pictures with a truck or bus")
     parser.add_argument("--min-area", type=float, default=0.03,
                         help="vehicles must cover this share of the picture")
+    parser.add_argument("--split", choices=("train", "val"), default="train",
+                        help="COCO split to draw from (default train: far "
+                             "more pictures than val)")
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args(argv)
 
     try:
-        instances, captions = load_annotations(args.cache)
+        instances, captions = load_annotations(args.cache, args.split)
     except (OSError, zipfile.BadZipFile, KeyError, ValueError) as exc:
         print(f"Cannot get the COCO annotations: {exc}", file=sys.stderr)
         return 1
 
     names = select(instances, captions, args.max_images, args.min_area,
                    args.heavy_share, args.seed)
+
+    if len(names) < args.max_images:
+        print(f"Only {len(names)} pictures qualify (asked for "
+              f"{args.max_images}). Try --split train or a lower --min-area.")
+
+    del instances, captions       # free the memory before downloading
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     print(f"Downloading {len(names)} pictures to {out} ...", flush=True)
 
     with ThreadPoolExecutor(max_workers=16) as pool:
         results = list(pool.map(
-            lambda n: (n, _download(IMAGE_URL.format(name=n), out / n)),
+            lambda n: (n, _download(
+                IMAGE_URL.format(split=args.split, name=n), out / n)),
             names))
 
     failed = [n for n, ok in results if not ok]
     (out / "SOURCE.txt").write_text(
-        "COCO 2017 validation pictures (annotations CC BY 4.0; photos from "
+        f"COCO 2017 {args.split} pictures (annotations CC BY 4.0; photos from "
         "Flickr under various licences). Selected as cars, trucks and buses "
         "without emergency captions. For training negatives only.\n")
     print(f"Done: {len(names) - len(failed)} pictures"
