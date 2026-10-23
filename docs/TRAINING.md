@@ -92,8 +92,11 @@ It prints the scores on the test split, the share of empty pictures flagged,
 and for `--negatives` the share of real ordinary pictures flagged with the wrong
 class each one picked. See [EVALUATION.md](EVALUATION.md).
 
-## Quick fix without retraining
+## Tuning without retraining
 
-If your current model flags ordinary trucks and cars, raise the confidence it
-needs: set `EMERGENCY_CONFIDENCE=0.85` in `.env` (default 0.65). You will miss
-some real emergency vehicles. Retraining with real negatives is the proper fix.
+`EMERGENCY_CONFIDENCE` in `.env` (default 0.65) sets how sure the model must be.
+Raise it if ordinary vehicles are flagged on your cameras; lower it if real
+emergency vehicles are missed. Measure both before changing it (the Colab
+notebook and `docs/EVALUATION.md` show how). With the model trained as above,
+raising it past 0.65 only lost real detections. Retraining with negatives from
+your own footage is the proper fix for a camera-specific problem.

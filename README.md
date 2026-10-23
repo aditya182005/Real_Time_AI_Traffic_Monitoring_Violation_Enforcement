@@ -331,8 +331,8 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) (missing files, the
 
 | Metric | How it is measured | Result |
 |---|---|---|
-| Emergency-vehicle detection, mAP@0.5 | `scripts/train_emergency.py` scores the weights on held-out test pictures | Old model: 0.95 overall, but it flagged ordinary trucks and cars on real footage. **Being retrained** with real negatives; see [docs/TRAINING.md](docs/TRAINING.md) |
-| Emergency-vehicle false alarms | `scripts/check_emergency_model.py --negatives DIR` on real ordinary pictures kept out of training | Measure after retraining (target 5% or less) |
+| Emergency-vehicle detection, mAP@0.5 | `scripts/train_emergency.py` scores the weights on the held-out test split (40% ordinary vehicles) | **0.91** overall; 0.85 ambulance, 0.96 fire truck, 0.93 police car (precision 0.96, recall 0.85) |
+| Emergency-vehicle false alarms | 400 real ordinary pictures (cars, trucks, buses, half trucks/buses) kept out of training | **1.0%** flagged at the app's confidence of 0.65 (1.8% at 0.5); 97.4% of 231 real emergency test pictures found. Photos from public datasets, not your cameras: expect worse on CCTV |
 | Vehicle detection (cars, buses, ...) | Uses the pretrained COCO YOLOv8n | Not evaluated by this project |
 | Tracking (ID switches) | Needs hand-labelled tracks | Not measured |
 | Violation detection (precision / recall) | `scripts/evaluate.py` against labelled events | Run on the demo video and your own clips (see below) |
