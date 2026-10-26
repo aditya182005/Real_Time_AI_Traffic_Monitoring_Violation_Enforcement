@@ -6,7 +6,7 @@ from pathlib import Path
 import cv2
 
 from app import paths
-from app.alerts import twilio_alert
+from app.alerts import telegram_alert, twilio_alert
 from app.annotate import (
     EMERGENCY,
     VEHICLE,
@@ -669,6 +669,14 @@ class TrafficVideoProcessor:
                             )
                     elif self.send_collision_alerts:
                         entry["alert_status"] = "skipped (results not saved)"
+
+                    if self.send_collision_alerts and telegram_alert.is_configured():
+                        # Second channel; the Twilio status stays the record.
+                        entry["telegram_status"] = "pending"
+                        alert_threads.append(telegram_alert.notify(
+                            message, photo=evidence_path,
+                            on_done=lambda r, e=entry:
+                            e.update(telegram_status=r)))
 
                     summary.collisions.append(entry)
 
