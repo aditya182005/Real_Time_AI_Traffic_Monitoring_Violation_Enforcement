@@ -151,6 +151,9 @@ def calculate_fine(violation_type, speed=None, speed_limit=None):
     if violation_type == "wrong_way":
         return table["wrong_way"]
 
+    if violation_type == "no_helmet":
+        return table["no_helmet"]
+
     if violation_type == "speeding":
         if speed is None or speed_limit is None:
             raise ValueError("Speed and speed limit are required.")

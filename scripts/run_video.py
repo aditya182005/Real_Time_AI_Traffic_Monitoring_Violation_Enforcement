@@ -110,6 +110,16 @@ def build_parser(add_help=True):
              "pip install -r requirements/plates.txt)."
     )
     other.add_argument(
+        "--helmet", action="store_true",
+        help="Flag motorcycle riders without a helmet "
+             "(needs your trained models/helmet.pt)."
+    )
+    other.add_argument(
+        "--arduino-port", default=None, metavar="PORT",
+        help="Also show the signal on an Arduino's three LEDs (COM3, "
+             "/dev/ttyACM0). See hardware/arduino_signal/."
+    )
+    other.add_argument(
         "--emergency", action="store_true",
         help="Turn the simulated signal green for emergency vehicles "
              "(needs models/emergency_vehicle.pt)."
@@ -164,6 +174,7 @@ def settings_from_args(args):
         check_collisions=args.collisions,
         send_alerts=args.send_alerts,
         use_emergency=args.emergency,
+        check_helmet=args.helmet,
         read_plates=args.plates,
         save_to_db=not args.no_save,
     )
@@ -199,6 +210,7 @@ def is_live(text):
 
 
 def run(args, parser, detector=None, tracker=None, emergency_detector=None,
+        helmet_detector=None, signal_output=None,
         plate_reader=None, plate_locator=None,
         capture_factory=live.LatestFrameCapture):
     """Run the pipeline for parsed arguments and return the summary.
@@ -268,6 +280,23 @@ def run(args, parser, detector=None, tracker=None, emergency_detector=None,
 
         emergency_detector = EmergencyDetector()
 
+    if args.helmet and helmet_detector is None:
+        from app.detection.helmet_detector import HelmetDetector
+
+        if not HelmetDetector.available():
+            parser.error("--helmet needs models/helmet.pt (see "
+                         "docs/TRAINING.md: Helmet model).")
+
+        helmet_detector = HelmetDetector()
+
+    if args.arduino_port and signal_output is None:
+        from app.hardware.arduino import ArduinoError, ArduinoSignal
+
+        try:
+            signal_output = ArduinoSignal(args.arduino_port)
+        except ArduinoError as exc:
+            parser.error(str(exc))
+
     # A fresh run ID keeps event keys unique: track IDs and frame numbers
     # repeat between runs, and a repeated key is silently ignored.
     run_id = uuid.uuid4().hex[:8]
@@ -294,6 +323,7 @@ def run(args, parser, detector=None, tracker=None, emergency_detector=None,
         settings, width, height, detector, tracker, emergency_detector,
         OUTPUT_DIR / "violations" / run_id,
         plate_reader=plate_reader, plate_locator=plate_locator,
+        helmet_detector=helmet_detector, signal_output=signal_output,
     )
 
     options = dict(

@@ -6,7 +6,7 @@ from pathlib import Path
 import cv2
 
 from app import paths
-from app.alerts import twilio_alert
+from app.alerts import telegram_alert, twilio_alert
 from app.annotate import (
     EMERGENCY,
     VEHICLE,
@@ -17,6 +17,7 @@ from app.annotate import (
 )
 from app import plates
 from app.violation.collision_logic import CollisionHeuristic
+from app.violation.helmet import HelmetChecker
 from app.violation.red_light import RedLightDetector
 from app.violation.signal import SignalSimulator
 from app.violation.speed_estimator import SpeedEstimator
@@ -122,6 +123,8 @@ class TrafficVideoProcessor:
         priority_hold_seconds=10.0,
         speed=None,          # SpeedConfig, or None to skip speed checks
         wrong_way=None,      # WrongWayConfig, or None to skip
+        helmet_detector=None,  # object with detect(frame) -> heads
+        signal_output=None,  # object with send(state), e.g. an Arduino
         detect_collisions=False,
         send_collision_alerts=False,
         camera_id="CAM-01",
@@ -152,6 +155,8 @@ class TrafficVideoProcessor:
         self.priority_hold_seconds = priority_hold_seconds
         self.speed = speed
         self.wrong_way = wrong_way
+        self.helmet_detector = helmet_detector
+        self.signal_output = signal_output
         self.detect_collisions = detect_collisions
         self.send_collision_alerts = send_collision_alerts
         self.camera_id = camera_id
@@ -274,6 +279,8 @@ class TrafficVideoProcessor:
                 self.speed.distance_m, self.speed.x_min, self.speed.x_max,
             ) if self.speed else None
         )
+        helmet_checker = (
+            HelmetChecker() if self.helmet_detector is not None else None)
         wrong_way_detector = (
             WrongWayDetector(
                 self.wrong_way.expected, self.wrong_way.min_travel_px,
@@ -400,6 +407,21 @@ class TrafficVideoProcessor:
                     else self.signal.state_at(tick, fps)
                 )
 
+                heads = []
+
+                if helmet_checker is not None:
+                    try:
+                        heads = self.helmet_detector.detect(frame)
+                    except Exception as exc:  # never stop the analysis
+                        print(f"Helmet check failed: {type(exc).__name__}")
+
+                if self.signal_output is not None:
+                    try:
+                        self.signal_output.send(signal_state)
+                    except Exception as exc:  # a loose cable must not stop us
+                        print(f"Signal output stopped: {exc}")
+                        self.signal_output = None
+
                 # -- per-vehicle checks --------------------------------------
                 vehicles = []
                 events = []     # (type, track_id, bbox, class_name, extra)
@@ -448,6 +470,16 @@ class TrafficVideoProcessor:
                                 ("wrong_way", track_id, bbox, class_name, {})
                             )
                             flagged = True
+
+                    if (
+                        helmet_checker is not None and track_id != -1
+                        and class_name == "motorcycle"
+                        and helmet_checker.update(track_id, bbox, heads)
+                    ):
+                        events.append(
+                            ("no_helmet", track_id, bbox, class_name, {})
+                        )
+                        flagged = True
 
                     if (
                         plate_votes is not None and track_id != -1
@@ -669,6 +701,14 @@ class TrafficVideoProcessor:
                             )
                     elif self.send_collision_alerts:
                         entry["alert_status"] = "skipped (results not saved)"
+
+                    if self.send_collision_alerts and telegram_alert.is_configured():
+                        # Second channel; the Twilio status stays the record.
+                        entry["telegram_status"] = "pending"
+                        alert_threads.append(telegram_alert.notify(
+                            message, photo=evidence_path,
+                            on_done=lambda r, e=entry:
+                            e.update(telegram_status=r)))
 
                     summary.collisions.append(entry)
 

@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from app import paths, review
+from app import challan, paths, review
 from app.ui import auth, theme
 from app.ui.data import ROOT
 from app.ui.helpers import show_image
@@ -158,6 +158,9 @@ def _review_controls(row):
     if isinstance(by, str) and by:
         st.caption(f"By {by}, {str(row.get('reviewed_at', ''))[:19]} UTC")
 
+    if status == review.APPROVED:
+        _challan_button(record_id)
+
     if not auth.can("operate"):
         st.caption("Operators and admins can approve or reject.")
         return
@@ -185,3 +188,19 @@ def _review_controls(row):
 
         st.cache_data.clear()
         st.rerun()
+
+
+def _challan_button(record_id):
+    """Download the e-challan PDF for an approved violation."""
+
+    try:
+        record = challan.fetch_record(record_id)
+        data = challan.build_pdf(record)
+        name = challan.challan_number(record) + ".pdf"
+    except (challan.ChallanError, OSError) as exc:
+        st.caption(f"E-challan unavailable: {exc}")
+        return
+
+    st.download_button("Download e-challan (PDF)", data=data,
+                       file_name=name, mime="application/pdf",
+                       key=f"challan_{record_id}")
