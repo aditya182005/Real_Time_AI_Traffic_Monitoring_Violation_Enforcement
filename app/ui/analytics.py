@@ -164,6 +164,7 @@ EVENT_NAMES = {
     "red_light": "Red light",
     "speeding": "Speeding",
     "wrong_way": "Wrong way",
+    "no_helmet": "No helmet",
 }
 
 

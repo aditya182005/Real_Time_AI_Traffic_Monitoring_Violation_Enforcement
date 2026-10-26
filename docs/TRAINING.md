@@ -100,3 +100,16 @@ emergency vehicles are missed. Measure both before changing it (the Colab
 notebook and `docs/EVALUATION.md` show how). With the model trained as above,
 raising it past 0.65 only lost real detections. Retraining with negatives from
 your own footage is the proper fix for a camera-specific problem.
+
+## Helmet model
+
+No helmet model is included and none is claimed to be accurate. To use
+`--helmet`:
+
+1. Train a YOLOv8 detector on a public helmet dataset (for example from
+   Roboflow Universe; check its licence) whose classes are the head *with* and
+   *without* a helmet (names like `helmet` / `no helmet`, or `head`).
+2. Copy the weights to `models/helmet.pt`.
+3. Run your own motorbike footage through `scripts/run_video.py --helmet` and
+   check the flagged records on the Evidence page before trusting it. Wrong
+   flags are fines issued to the wrong person, so keep the human review on.

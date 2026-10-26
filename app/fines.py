@@ -6,6 +6,7 @@ a JSON file (and keep it under version control with the rule it came from)::
     {
       "red_light": 1000,
       "wrong_way": 1500,
+      "no_helmet": 1000,
       "speeding": {"base": 500, "per_10_kmh": 100}
     }
 
@@ -20,6 +21,7 @@ from pathlib import Path
 DEMO = {
     "red_light": 1000,
     "wrong_way": 1500,
+    "no_helmet": 1000,
     "speeding": {"base": 500, "per_10_kmh": 100},
 }
 
@@ -52,10 +54,11 @@ def parse(data):
     table = {
         "red_light": DEMO["red_light"],
         "wrong_way": DEMO["wrong_way"],
+        "no_helmet": DEMO["no_helmet"],
         "speeding": dict(DEMO["speeding"]),
     }
 
-    for key in ("red_light", "wrong_way"):
+    for key in ("red_light", "wrong_way", "no_helmet"):
         if key in data:
             table[key] = _amount(data[key], key)
 

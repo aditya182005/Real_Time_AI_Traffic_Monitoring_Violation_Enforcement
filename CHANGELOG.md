@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* New: PDF e-challans for approved violations (`app/challan.py`, Evidence page button, CLI), Telegram alerts, no-helmet check (bring your own `models/helmet.pt`), adaptive signal timing simulator (`python -m app.signals.adaptive`), Arduino LED output (`--arduino-port`, `hardware/arduino_signal/`).
+
 * Measured results for the retrained emergency model (test mAP@0.5 0.91; 1.0% of 400 held-out ordinary pictures flagged at confidence 0.65; 97.4% of real emergency pictures found).
 * Fix for trucks flagged as fire trucks and cars as police cars: the bundled emergency dataset is removed; new Colab notebook trains on real-world datasets plus real street negatives (COCO, your own frames), checks for hidden emergency vehicles, and tests on held-out real pictures.
 * New `--negatives` option in `build_emergency_dataset.py`, `fetch_coco_negatives.py`, `extract_frames.py`, `check_emergency_model.py --negatives`, and `EMERGENCY_CONFIDENCE`.

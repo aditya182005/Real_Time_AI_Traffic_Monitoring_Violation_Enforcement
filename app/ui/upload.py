@@ -51,6 +51,7 @@ VIOLATION_NAMES = {
     "red_light": "Red light",
     "speeding": "Speeding",
     "wrong_way": "Wrong way",
+    "no_helmet": "No helmet",
 }
 
 
@@ -66,6 +67,13 @@ def load_vehicle_detector():
 @st.cache_resource(show_spinner="Loading the emergency-vehicle model…")
 def load_emergency_detector():
     return EmergencyDetector()
+
+
+@st.cache_resource(show_spinner="Loading the helmet model…")
+def load_helmet_detector():
+    from app.detection.helmet_detector import HelmetDetector
+
+    return HelmetDetector()
 
 
 @st.cache_resource(show_spinner="Loading the plate reader (first time only)…")
@@ -533,6 +541,21 @@ def _settings_panel(run_options=True, default_camera="CAM-01",
         if not ready:
             st.caption("The emergency-vehicle model is not installed.")
 
+    with st.expander("Helmets"):
+        from app.detection.helmet_detector import HelmetDetector
+
+        ready = HelmetDetector.available()
+        settings.check_helmet = st.checkbox(
+            "Flag motorcycle riders without a helmet",
+            value=False, disabled=not ready, key="check_helmet",
+            help=None if ready else "Needs your trained models/helmet.pt.",
+        )
+
+        if not ready:
+            st.caption("No helmet model is installed. See docs/TRAINING.md "
+                       "(Helmet model); check its accuracy on your own "
+                       "footage before relying on it.")
+
     with st.expander("License plates"):
         available = plates.reader_available()
         settings.read_plates = st.checkbox(
@@ -691,6 +714,14 @@ def _run_video(staged, settings, max_frames, live):
     detector, emergency = models
     plate_reader, plate_locator = (
         load_plate_tools() if settings.read_plates else (None, None))
+    helmet = None
+
+    if settings.check_helmet:
+        try:
+            helmet = load_helmet_detector()
+        except Exception as exc:
+            st.error(f"Could not load the helmet model: {exc}")
+            return
 
     from app.tracking.tracker import VehicleTracker
 
@@ -702,6 +733,7 @@ def _run_video(staged, settings, max_frames, live):
         settings, staged["width"], staged["height"],
         detector, VehicleTracker(), emergency, run_dir / "evidence",
         plate_reader=plate_reader, plate_locator=plate_locator,
+        helmet_detector=helmet,
     )
 
     bar = st.progress(0.0, text="Starting…")

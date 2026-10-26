@@ -85,6 +85,18 @@ a web dashboard.
   are rate limited.
 * **Alerts are opt-in.** SMS or voice alerts go out only when Twilio is
   configured **and** you turn alerts on for that run.
+* **Issue an e-challan (PDF).** For an *approved* violation the Evidence page
+  offers a one-page PDF with the facts, the fine, the evidence pictures and the
+  record seal (`python -m app.challan --all-approved` for a batch). It is a demo
+  document, not a legal notice.
+* **Alert on Telegram too.** Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`
+  and collision alerts also go to a chat, with the evidence picture.
+* **Spot riders without a helmet (needs your own model).** `--helmet` with a
+  trained `models/helmet.pt`; no helmet model ships with the project.
+* **Try adaptive signal timing.** `python -m app.signals.adaptive` compares fixed
+  and traffic-aware green times on a simulated four-way junction.
+* **Show the signal on LEDs.** `--arduino-port COM3` mirrors the signal state to
+  an Arduino with three LEDs (`hardware/arduino_signal/`).
 * **Try it without your own footage.** `data/samples` has pictures of
   ambulances, fire trucks, police cars and ordinary vehicles, and
   `data/videos/demo_all_checks.mp4` triggers every check once.
@@ -288,6 +300,9 @@ Copy `.env.example` to `.env`, fill in the `TWILIO_*` values and
 python -m app.alerts.twilio_alert            # check the settings
 python -m app.alerts.twilio_alert --send     # send one real test SMS
 ```
+
+Telegram is optional and works the same way
+(`python -m app.alerts.telegram_alert --send`).
 
 Full list of settings: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 

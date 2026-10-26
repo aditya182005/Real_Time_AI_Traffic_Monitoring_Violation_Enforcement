@@ -75,6 +75,30 @@ then test with `python -m app.alerts.twilio_alert --send`.
 
 ## Fines
 
-Default fines are illustrative: red light 1000, wrong way 1500, speeding 500 plus
+Default fines are illustrative: red light 1000, wrong way 1500, no helmet 1000, speeding 500 plus
 100 per 10 km/h over the limit. Set `FINES_FILE` to use your own amounts (`app/fines.py`). Every record
 should be reviewed by a person before any real-world use.
+
+## E-challans
+
+On the Evidence page, approve a violation and a **Download e-challan (PDF)**
+button appears. Unapproved or rejected records get none. From a terminal:
+`python -m app.challan --id 12` or `--all-approved` (files go to
+`outputs/challans/`, each one is noted in the audit log). The PDF says on every
+page that it is a demonstration document: a legal notice needs the authority
+that has the power to fine.
+
+## Helmets, adaptive signals and the Arduino LEDs
+
+* **No helmet.** `python scripts/run_video.py --input clip.mp4 --helmet`, or the
+  Helmets box on Analyze footage. It needs `models/helmet.pt` (see
+  [TRAINING.md](TRAINING.md#helmet-model)). A rider is flagged only when
+  several frames agree, and the head must sit on a tracked motorcycle.
+* **Adaptive timing.** `python -m app.signals.adaptive` runs fixed and
+  traffic-aware timing on identical simulated traffic and prints average wait.
+  Options: `--seconds`, `--seed`, `--rates N,E,S,W`.
+* **LEDs.** Wire three LEDs as in `hardware/arduino_signal/arduino_signal.ino`,
+  upload the sketch, find the port with `python -m app.hardware.arduino --list`
+  (needs `pip install pyserial`), test with `--port COM3`, then add
+  `--arduino-port COM3` to `run_video.py`. The amber LED flashes if the link
+  drops. Desk model only; never connect it to a real signal.

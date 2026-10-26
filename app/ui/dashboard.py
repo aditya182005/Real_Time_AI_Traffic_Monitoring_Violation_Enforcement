@@ -130,10 +130,13 @@ def _violations_tab(data):
     speeding = analytics.by_type(violations, "speeding")
     wrong_way = analytics.by_type(violations, "wrong_way")
 
-    a, b, c = st.columns(3)
+    no_helmet = analytics.by_type(violations, "no_helmet")
+
+    a, b, c, d = st.columns(4)
     a.metric("Red light", len(red_light))
     b.metric("Speeding", len(speeding))
     c.metric("Wrong way", len(wrong_way))
+    d.metric("No helmet", len(no_helmet))
 
     filtered = violations
 

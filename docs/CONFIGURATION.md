@@ -12,6 +12,8 @@ and edit it. `.env` is git-ignored; never commit it.
 | `TWILIO_PHONE_NUMBER` | empty | Your Twilio number, international format. |
 | `ALERT_TO_PHONE` | empty | Who to alert. Trial accounts: must be verified. |
 | `ALERT_VOICE_CALL` | `false` | Also place a call for each collision. |
+| `TELEGRAM_BOT_TOKEN` | empty | Bot token from @BotFather. Blank disables Telegram. |
+| `TELEGRAM_CHAT_ID` | empty | Chat to send to (message the bot, then open `getUpdates`). |
 | `CAMERA_ID` | `CAM-01` | Camera name stored with records and alerts. |
 
 ## Deployment and storage

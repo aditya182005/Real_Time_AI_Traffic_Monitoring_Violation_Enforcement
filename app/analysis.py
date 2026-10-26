@@ -98,6 +98,7 @@ class VideoSettings:
     lane_from_pct: float = 0
     lane_to_pct: float = 100
 
+    check_helmet: bool = False          # needs models/helmet.pt
     check_collisions: bool = False
     send_alerts: bool = False
 
@@ -163,7 +164,8 @@ def build_signal(settings):
 
 def build_processor(settings, width, height, detector, tracker,
                     emergency_detector, evidence_dir, plate_reader=None,
-                    plate_locator=None):
+                    plate_locator=None, helmet_detector=None,
+                    signal_output=None):
     """Create a configured ``TrafficVideoProcessor`` for a video's size."""
 
     from app.video_processor import (
@@ -205,6 +207,9 @@ def build_processor(settings, width, height, detector, tracker,
         ),
         speed=speed,
         wrong_way=wrong_way,
+        helmet_detector=(
+            helmet_detector if settings.check_helmet else None),
+        signal_output=signal_output,
         detect_collisions=settings.check_collisions,
         send_collision_alerts=(
             settings.check_collisions and settings.send_alerts
