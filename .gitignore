@@ -7,6 +7,9 @@ __pycache__/
 runs/
 outputs/
 *.pt
+# ...except the trained emergency-vehicle model the app ships with
+!models/emergency_vehicle.pt
+backups/
 # Ultralytics label caches embed absolute paths and are rebuilt automatically.
 *.cache
 .pytest_cache/

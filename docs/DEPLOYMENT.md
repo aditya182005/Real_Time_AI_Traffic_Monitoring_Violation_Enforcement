@@ -11,7 +11,29 @@ Do the same check yourself on the first deploy (step 4).
 * A Linux server or VM with Docker and the Compose plugin. 2 CPUs and 4 GB of
   RAM is the practical minimum (PyTorch and YOLO need the memory).
 * A domain name pointing at it, for HTTPS.
-* Optional: `models/emergency_vehicle.pt` (see [TRAINING.md](TRAINING.md)).
+* The trained emergency-vehicle model is already in `models/` (see [TRAINING.md](TRAINING.md) to replace it with your own).
+
+## Quick path (a Linux server with Docker)
+
+```bash
+git clone https://github.com/aditya182005/Real_Time_AI_Traffic_Monitoring_Violation_Enforcement.git
+cd Real_Time_AI_Traffic_Monitoring_Violation_Enforcement
+cp .env.example .env && nano .env        # at least DOMAIN, see step 1
+docker compose --profile https up -d --build
+docker compose exec traffic-agent python -m app.users add alice --role admin
+docker compose exec traffic-agent python scripts/check_setup.py --full --production
+```
+
+Then open `https://your-domain`. That starts three containers: the dashboard,
+**maintenance** (every 24 hours: integrity check, retention, backup) and
+**caddy** (HTTPS with an automatic certificate). The trained emergency-vehicle
+model (`models/emergency_vehicle.pt`) is in the repository, so emergency
+detection works from the first start.
+
+Without a domain (a campus LAN or a demo) leave `DOMAIN` empty, start with
+`docker compose up -d --build`, and set `BIND_ADDRESS=0.0.0.0` to reach it from
+other computers. That is plain HTTP: use individual accounts only on a network
+you trust.
 
 ## 1. Configure
 
@@ -23,10 +45,14 @@ Edit `.env`:
 
 | Setting | Why |
 |---|---|
-| Sign-in | **Required in production**: the app refuses to show anything without it. Pick one: individual accounts (`docker compose exec traffic-agent python -m app.users add alice --role admin`), `DASHBOARD_PASSWORD`, or `AUTH_MODE=proxy` (below). |
+| `DOMAIN` | The name that points at this server. With `--profile https` Caddy gets a certificate for it (ports 80 and 443 must be open). |
+| Sign-in | **Required in production**: the app refuses to show anything without it. Pick one: individual accounts (`docker compose exec traffic-agent python -m app.users add alice --role admin`), `DASHBOARD_PASSWORD` (12+ characters), or `AUTH_MODE=proxy` (below). |
+| `EVIDENCE_RETENTION_DAYS` | Days to keep evidence pictures and plates. The daily job enforces it. `0` keeps everything: choose a number your rules allow. |
+| `FINES_FILE` | Your own fine amounts (copy `deploy/fines.example.json`). Without it the demo amounts are used. |
+| `BACKUP_PATH`, `BACKUP_KEEP` | Where the daily backups go (a second disk or NAS, writable by uid 1000) and how many to keep (default 7). |
 | `LIVE_CAMERAS` | Cameras people may start, as `Name=rtsp://...;Name2=...`. Contains passwords: keep `.env` private. |
 | `LIVE_MAX_CAMERAS` | Cameras analyzed at once (default 1). Each one needs its own share of CPU/GPU. |
-| `TWILIO_*`, `ALERT_TO_PHONE` | Optional SMS/voice alerts. Test first with `python -m app.alerts.twilio_alert --send` (see [CONFIGURATION.md](CONFIGURATION.md)). |
+| `TWILIO_*`, `ALERT_TO_PHONE`, `TELEGRAM_*` | Optional alerts. Test first with `python -m app.alerts.twilio_alert --send` / `python -m app.alerts.telegram_alert --send`. |
 | `CAMERA_ID` | Name stored with records and alerts. |
 | `UPLOAD_RETENTION_DAYS` | Deletes upload-run folders older than this. `docker-compose.yml` sets 30. `0` keeps everything. Database rows are never deleted. |
 
@@ -35,28 +61,23 @@ Never commit `.env` (it is git-ignored).
 ## 2. Start
 
 ```bash
-docker compose up -d --build
+docker compose --profile https up -d --build     # or without --profile https
 docker compose logs -f
 ```
 
 The first build takes several minutes (it downloads PyTorch and the YOLO
-weights). The app listens on port 8501.
+weights). Port 8501 is published on `127.0.0.1` only unless you set
+`BIND_ADDRESS`, so nothing is exposed except through Caddy.
 
 ## 3. HTTPS
 
-Do not expose port 8501 directly: the password would travel in clear text.
-Put a reverse proxy in front. With Caddy (automatic certificates), a
-`Caddyfile`:
-
-```
-traffic.example.com {
-    reverse_proxy localhost:8501
-}
-```
-
-Streamlit needs WebSocket support, which Caddy and nginx (with the usual
-`Upgrade` headers) both provide. Then close port 8501 to the outside in the
-firewall, or change the compose port mapping to `127.0.0.1:8501:8501`.
+The `https` profile runs Caddy using `deploy/Caddyfile.compose`. The domain must
+already point at the server, otherwise the certificate request fails (check
+`docker compose logs caddy`). If you use your own proxy instead (nginx, a cloud
+load balancer), leave the profile off, keep `BIND_ADDRESS=127.0.0.1`, and
+proxy to port 8501 with WebSocket support; `deploy/nginx.conf` and
+`deploy/Caddyfile` are starting points. Never expose port 8501 directly with a
+password: it would travel in clear text.
 
 ### Per-user sign-in
 
@@ -88,26 +109,46 @@ firewall, or change the compose port mapping to `127.0.0.1:8501:8501`.
 ## 4. Verify the deployment
 
 ```bash
-docker compose exec traffic-agent python scripts/check_setup.py --full
-curl -I https://traffic.example.com/_stcore/health     # 200 OK
+docker compose exec traffic-agent python scripts/check_setup.py --full --production
+curl -I https://your-domain/_stcore/health     # 200 OK
 ```
 
-Then open the site, log in, press **Try the sample video** on *Analyze
-footage*, and confirm the Dashboard page shows the new violation.
+`--production` turns a missing sign-in or `APP_ENV` into a failure and warns
+about a missing domain, retention, fine table or backup folder. Then open the
+site, sign in, press **Try the sample video** on *Analyze footage* and confirm
+the Dashboard shows the new violations.
 
 ## Data and backups
 
 Everything the app writes (the SQLite database, uploads, evidence images,
 annotated videos) lives in the `traffic_data` Docker volume, mounted at
-`/data`. Back it up regularly:
+`/data`.
+
+**Backups are automatic.** The `maintenance` container writes
+`traffic-data-<time>.tgz` (a consistent copy of the database, the evidence and
+output files and `users.json`) to `BACKUP_PATH` every 24 hours and keeps the
+newest `BACKUP_KEEP`. Before each backup it checks the record chain and appends
+the head hash to `integrity-heads.log` in the same folder. Read what it did:
 
 ```bash
-docker run --rm -v traffic_agent_traffic_data:/data -v "$PWD":/backup alpine \
-    tar czf /backup/traffic-data-$(date +%F).tgz -C /data .
+docker compose logs maintenance
+docker compose exec maintenance python -m app.maintenance --once   # run now
 ```
 
-(The volume name is `<project folder>_traffic_data`; `docker volume ls` shows
-it.) Evidence images are only ever served from the project folder or the data
+A backup on the same disk does not survive that disk failing: point
+`BACKUP_PATH` at another disk, and copy the folder (with
+`integrity-heads.log`) off the machine as well. To restore, stop the app,
+extract the archive into the `traffic_data` volume and start it again:
+
+```bash
+docker compose down
+docker run --rm -v traffic-agent_traffic_data:/data -v "$PWD/backup":/b alpine \
+    tar xzf /b/traffic-data-YYYYMMDD-HHMMSS.tgz -C /data
+docker compose --profile https up -d
+```
+
+(Volume names are `<project folder>_traffic_data`; `docker volume ls` shows
+them.) Evidence images are only ever served from the project folder or the data
 directory; paths outside are refused.
 
 ## Security notes

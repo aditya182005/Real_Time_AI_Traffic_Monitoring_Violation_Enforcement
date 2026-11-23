@@ -2,6 +2,7 @@
 
     python scripts/check_setup.py            # quick checks (a second or two)
     python scripts/check_setup.py --full     # also loads YOLO and runs it on a photo
+    python scripts/check_setup.py --production   # also checks the settings for a server
 
 Each line is OK, WARN (something works but a feature is off) or FAIL
 (the app will not run). The exit status is 1 if anything failed, so it can
@@ -221,6 +222,94 @@ def check_writable(root=None):
     return checks
 
 
+def production_checks(env=None):
+    """Settings a public server needs. FAIL means do not go live yet."""
+
+    import os
+
+    env = os.environ if env is None else env
+    checks = []
+
+    if env.get("APP_ENV", "").strip().lower() in ("production", "prod"):
+        checks.append(Check(OK, "Production mode", "APP_ENV=production"))
+    else:
+        checks.append(Check(
+            FAIL, "Production mode", "APP_ENV is not 'production', so the "
+            "app would run without its sign-in requirement",
+            "Set APP_ENV=production in .env (the Docker image sets it)."))
+
+    # Sign-in: accounts, one shared password, or a proxy in front.
+    try:
+        from app import users
+
+        has_users = bool(users.load_users())
+    except Exception:
+        has_users = False
+
+    mode = env.get("AUTH_MODE", "").strip().lower()
+    password = env.get("DASHBOARD_PASSWORD", "")
+
+    if mode == "proxy":
+        checks.append(Check(
+            OK, "Sign-in", "AUTH_MODE=proxy: make sure the app is reachable "
+            "only through the identity proxy"))
+    elif has_users:
+        checks.append(Check(OK, "Sign-in", "individual accounts exist"))
+    elif password:
+        weak = len(password) < 12 or password.lower() in (
+            "password", "admin", "changeme", "traffic", "letmein")
+        checks.append(Check(
+            WARN if weak else OK, "Sign-in",
+            "one shared password" + (" (short or easy to guess)" if weak else ""),
+            "Use 12+ characters, or create accounts: python -m app.users add "
+            "NAME --role admin" if weak else ""))
+    else:
+        checks.append(Check(
+            FAIL, "Sign-in", "no accounts and no DASHBOARD_PASSWORD: the "
+            "app will refuse to show anything",
+            "docker compose exec traffic-agent python -m app.users add NAME "
+            "--role admin   (or set DASHBOARD_PASSWORD in .env)"))
+
+    if env.get("DOMAIN", "").strip() in ("", "localhost"):
+        checks.append(Check(
+            WARN, "HTTPS domain", "DOMAIN is not set: no HTTPS, and a password "
+            "would travel in clear text",
+            "Point a domain at this server, set DOMAIN=... in .env and start "
+            "with: docker compose --profile https up -d"))
+    else:
+        checks.append(Check(OK, "HTTPS domain", env["DOMAIN"].strip()))
+
+    try:
+        days = int(env.get("EVIDENCE_RETENTION_DAYS", "0") or 0)
+    except ValueError:
+        days = 0
+
+    checks.append(
+        Check(OK, "Data retention", f"evidence and plates kept {days} days")
+        if days > 0 else
+        Check(WARN, "Data retention",
+              "EVIDENCE_RETENTION_DAYS is 0: plates and evidence are kept "
+              "forever", "Set a number of days that your rules allow."))
+
+    checks.append(
+        Check(OK, "Fine table", env["FINES_FILE"])
+        if env.get("FINES_FILE", "").strip() else
+        Check(WARN, "Fine table", "using the demonstration fine amounts",
+              "Copy deploy/fines.example.json, edit it, set FINES_FILE."))
+
+    checks.append(
+        Check(OK, "Backup folder",
+              env.get("BACKUP_DIR", "").strip() or env["BACKUP_PATH"])
+        if (env.get("BACKUP_DIR", "").strip()
+            or env.get("BACKUP_PATH", "").strip()) else
+        Check(WARN, "Backup folder", "BACKUP_PATH is not set: backups go to a Docker "
+              "volume on the same disk as the data",
+              "Mount another disk and set BACKUP_PATH, and copy backups off "
+              "the machine too."))
+
+    return checks
+
+
 def quick_checks(root=ROOT):
     return (
         check_python()
@@ -383,12 +472,19 @@ def main(argv=None, root=ROOT, **components):
         "--full", action="store_true",
         help="also load the models and run them on data/images/test.jpg",
     )
+    parser.add_argument(
+        "--production", action="store_true",
+        help="also check the settings a public server needs",
+    )
     args = parser.parse_args(argv)
 
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
     checks = quick_checks(root)
+
+    if args.production:
+        checks += production_checks()
 
     if args.full:
         blocking = [c for c in checks if c.status == FAIL
