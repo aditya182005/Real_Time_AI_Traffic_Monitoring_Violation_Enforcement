@@ -31,12 +31,12 @@ COPY . .
 # Bake the base detector into the image so the first request does not
 # have to download it.
 RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')" \
-    && mkdir -p /data \
+    && mkdir -p /data /backups \
     && useradd --create-home app \
-    && chown -R app:app /app /data
+    && chown -R app:app /app /data /backups
 
 USER app
-VOLUME ["/data"]
+VOLUME ["/data", "/backups"]
 EXPOSE 8501
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \

@@ -16,20 +16,28 @@ and what only an authority or partner can provide. For servers and HTTPS see
 | Keep personal data no longer than needed | **Retention, export and erasure** of evidence images and plate text | `EVIDENCE_RETENTION_DAYS`, `python -m app.privacy ...` |
 | Know which model flagged what | Model version stored on every record | `MODEL_VERSION` or derived from the weights |
 
-### Routines to set up
+### Routines (mostly automatic now)
 
-1. **After each review session**, run `python -m app.integrity verify` and save
-   the printed *head hash* somewhere off the server (email, ticket). Later,
-   `verify --expect <hash>` proves nothing before that point was rewritten.
-   Without an outside copy, someone who controls the server could rebuild the
-   whole chain, and deleting only the newest records leaves no trace.
-2. **Retention**: set `EVIDENCE_RETENTION_DAYS` and also run
-   `python -m app.privacy purge` daily (cron or a scheduled task). The app
-   purges only when it starts.
-3. **Backups**: copy the data folder (`traffic_agent.db` and `outputs/`) to
-   storage on another machine, and keep the saved head hashes with them.
-4. **Fines**: write the amounts into a file under version control with a note of
-   the rule they come from, and set `FINES_FILE`.
+The `maintenance` container (started by `docker compose up`) runs
+`python -m app.maintenance --loop`, every 24 hours:
+
+1. **Integrity check**, with the head hash and result appended to
+   `integrity-heads.log` in the backup folder.
+2. **Retention**: `EVIDENCE_RETENTION_DAYS` and `UPLOAD_RETENTION_DAYS`.
+3. **Backup**: one archive, newest `BACKUP_KEEP` kept.
+
+What is still yours to do:
+
+* **Copy the backup folder off the server**, including `integrity-heads.log`.
+  Without an outside copy, someone who controls the server could rebuild the
+  whole chain, and deleting only the newest records leaves no trace. Later,
+  `python -m app.integrity verify --expect <hash from the log>` proves nothing
+  before that point was rewritten.
+* **Read `docker compose logs maintenance`** now and then: a failed night or an
+  integrity PROBLEM is printed there (and the job's exit status is 1).
+* **Fines**: write the amounts into a file under version control with a note of
+  the rule they come from, and set `FINES_FILE`.
+* **Before going live**: `python scripts/check_setup.py --full --production`.
 
 ### Limits to know
 

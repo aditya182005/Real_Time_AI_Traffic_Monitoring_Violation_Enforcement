@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Deployment readiness: the trained `models/emergency_vehicle.pt` is now in the repository; `docker compose --profile https up -d` adds HTTPS (Caddy, automatic certificate); a `maintenance` container runs `python -m app.maintenance` daily (integrity check with head-hash log, retention, backup with rotation); `scripts/check_setup.py --production` checks sign-in, `APP_ENV`, domain, retention, fines and backups; the dashboard port is published on `127.0.0.1` by default (`BIND_ADDRESS`); CI validates the compose files and runs the maintenance job.
+
 * New: PDF e-challans for approved violations (`app/challan.py`, Evidence page button, CLI), Telegram alerts, no-helmet check (bring your own `models/helmet.pt`), adaptive signal timing simulator (`python -m app.signals.adaptive`), Arduino LED output (`--arduino-port`, `hardware/arduino_signal/`).
 
 * Measured results for the retrained emergency model (test mAP@0.5 0.91; 1.0% of 400 held-out ordinary pictures flagged at confidence 0.65; 97.4% of real emergency pictures found).

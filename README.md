@@ -318,10 +318,13 @@ Over 400 tests use stand-in detectors, so they need no model weights or GPU.
 ### Docker and servers
 
 ```bash
-docker compose up -d --build
+cp .env.example .env            # edit it: DOMAIN, sign-in, retention
+docker compose --profile https up -d --build
+docker compose exec traffic-agent python scripts/check_setup.py --full --production
 ```
 
-HTTPS, sign-in, backups and security notes: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+This starts the dashboard, a daily maintenance job (integrity check, retention,
+backup) and HTTPS. Step by step: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). HTTPS, sign-in, backups and security notes: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ### Something went wrong?
 

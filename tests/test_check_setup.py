@@ -230,3 +230,50 @@ class MainTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProductionCheckTests(unittest.TestCase):
+    GOOD = {"APP_ENV": "production", "AUTH_MODE": "proxy", "DOMAIN": "t.example.com",
+            "EVIDENCE_RETENTION_DAYS": "30", "FINES_FILE": "f.json",
+            "BACKUP_PATH": "/backups"}
+
+    def run_checks(self, **env):
+        return statuses(check_setup.production_checks({**self.GOOD, **env}))
+
+    def test_fully_configured_server_has_no_warnings(self):
+        self.assertEqual(set(self.run_checks().values()), {OK})
+
+    def test_not_production_is_a_failure(self):
+        self.assertEqual(self.run_checks(APP_ENV="")["Production mode"], FAIL)
+
+    def test_no_sign_in_is_a_failure(self):
+        with mock.patch("app.users.load_users", return_value={}):
+            self.assertEqual(self.run_checks(AUTH_MODE="")["Sign-in"], FAIL)
+
+    def test_short_shared_password_is_a_warning_and_long_one_is_ok(self):
+        with mock.patch("app.users.load_users", return_value={}):
+            self.assertEqual(self.run_checks(
+                AUTH_MODE="", DASHBOARD_PASSWORD="admin")["Sign-in"], WARN)
+            self.assertEqual(self.run_checks(
+                AUTH_MODE="", DASHBOARD_PASSWORD="a-long-enough-pass")["Sign-in"], OK)
+
+    def test_accounts_count_as_sign_in(self):
+        with mock.patch("app.users.load_users", return_value={"a": {}}):
+            self.assertEqual(self.run_checks(AUTH_MODE="")["Sign-in"], OK)
+
+    def test_warnings_for_missing_https_retention_fines_backups(self):
+        result = self.run_checks(DOMAIN="", EVIDENCE_RETENTION_DAYS="0",
+                                 FINES_FILE="", BACKUP_PATH="")
+
+        for name in ("HTTPS domain", "Data retention", "Fine table", "Backup folder"):
+            self.assertEqual(result[name], WARN, name)
+
+    def test_cli_flag_adds_the_checks(self):
+        out = io.StringIO()
+
+        with contextlib.redirect_stdout(out), \
+                mock.patch.dict("os.environ", {"APP_ENV": ""}):
+            code = check_setup.main(["--production"])
+
+        self.assertIn("Production mode", out.getvalue())
+        self.assertEqual(code, 1)

@@ -1,21 +1,76 @@
+# Traffic Agent. Quick start on a server: docs/DEPLOYMENT.md
+#
+#   cp .env.example .env            # then edit it
+#   docker compose up -d --build                    # dashboard + daily upkeep
+#   docker compose --profile https up -d --build    # ... plus HTTPS (set DOMAIN)
+
 services:
   traffic-agent:
     build:
       context: .
       args:
         WITH_PLATES: ${WITH_PLATES:-0}     # 1 adds license-plate reading
+    image: traffic-agent:local
+    # Published on this machine only by default. With the https profile Caddy
+    # reaches it inside Docker; for plain access from other computers on a
+    # trusted network (no HTTPS) set BIND_ADDRESS=0.0.0.0 in .env.
     ports:
-      - "8501:8501"
-    env_file: .env          # DASHBOARD_PASSWORD, Twilio settings, CAMERA_ID
+      - "${BIND_ADDRESS:-127.0.0.1}:8501:8501"
+    env_file: .env          # sign-in, Twilio, Telegram, retention, ...
     environment:
       APP_ENV: production
       TRAFFIC_AGENT_DATA_DIR: /data
       UPLOAD_RETENTION_DAYS: "30"
     volumes:
       - traffic_data:/data              # database, uploads, evidence
-      - ./models:/app/models:ro         # emergency_vehicle.pt (optional)
+      - ./models:/app/models:ro         # emergency_vehicle.pt
     restart: unless-stopped
     mem_limit: 4g
 
+  # Every 24 hours: check the record chain, apply retention, write a backup.
+  # See `python -m app.maintenance --help` and docs/PRODUCTION.md.
+  maintenance:
+    image: traffic-agent:local
+    depends_on:
+      - traffic-agent
+    command: ["python", "-m", "app.maintenance", "--loop"]
+    env_file: .env
+    environment:
+      APP_ENV: production
+      TRAFFIC_AGENT_DATA_DIR: /data
+      BACKUP_DIR: /backups
+      UPLOAD_RETENTION_DAYS: "30"
+    volumes:
+      - traffic_data:/data
+      # A named volume by default. For a second disk or a NAS use a host path
+      # (BACKUP_PATH=/mnt/backups) that the container user (uid 1000) can write.
+      - ${BACKUP_PATH:-traffic_backups}:/backups
+    healthcheck:
+      disable: true         # the image's check is for the dashboard
+    restart: unless-stopped
+    mem_limit: 512m
+
+  # HTTPS with an automatic certificate. Needs a domain that points at this
+  # server and ports 80 and 443 open: set DOMAIN in .env.
+  caddy:
+    profiles: ["https"]
+    image: caddy:2
+    depends_on:
+      - traffic-agent
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile.compose:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
 volumes:
   traffic_data:
+  traffic_backups:
+  caddy_data:
+  caddy_config:

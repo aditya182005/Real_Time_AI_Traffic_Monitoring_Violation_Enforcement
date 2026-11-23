@@ -1,0 +1,16 @@
+# Used by `docker compose --profile https up -d`. DOMAIN comes from .env.
+# Streamlit needs WebSockets; Caddy proxies them without extra settings.
+{$DOMAIN} {
+    encode gzip
+
+    # Uploads can be large (the app limits them to 200 MB).
+    request_body {
+        max_size 210MB
+    }
+
+    # Overwrite, never trust, what the client says about its address: the
+    # app uses it for the sign-in lockout.
+    reverse_proxy traffic-agent:8501 {
+        header_up X-Forwarded-For {remote_host}
+    }
+}

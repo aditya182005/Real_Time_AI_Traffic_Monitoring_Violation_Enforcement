@@ -23,7 +23,14 @@ jobs:
     needs: tests
     steps:
       - uses: actions/checkout@v4
+      - name: Compose files are valid (with and without HTTPS)
+        run: |
+          cp .env.example .env
+          docker compose config -q
+          docker compose --profile https config -q
       - name: Build the image
         run: docker build -t traffic-agent .
       - name: Real YOLO + ByteTrack smoke test inside the image
         run: docker run --rm -e APP_ENV= traffic-agent python scripts/check_setup.py --full
+      - name: Daily upkeep job runs (integrity check, retention, backup)
+        run: docker run --rm -e APP_ENV= traffic-agent python -m app.maintenance --once
