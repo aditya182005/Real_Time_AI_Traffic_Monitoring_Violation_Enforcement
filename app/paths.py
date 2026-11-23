@@ -28,3 +28,10 @@ OUTPUT_DIR = DATA_DIR / "outputs"
 # Evidence images are only ever read from these folders. The dashboard takes
 # file paths from the database, so anything outside is refused.
 ALLOWED_EVIDENCE_ROOTS = tuple(dict.fromkeys((ROOT, DATA_DIR)))
+
+
+def demo_hosting():
+    """True on a throwaway host (Streamlit Community Cloud), where the disk
+    is erased on restart. Set ``DEMO_HOSTING=1`` there."""
+
+    return os.getenv("DEMO_HOSTING", "").strip().lower() in ("1", "true", "yes")

@@ -13,6 +13,9 @@ Do the same check yourself on the first deploy (step 4).
 * A domain name pointing at it, for HTTPS.
 * The trained emergency-vehicle model is already in `models/` (see [TRAINING.md](TRAINING.md) to replace it with your own).
 
+> Just want a free demo link? See [STREAMLIT_CLOUD.md](STREAMLIT_CLOUD.md). It is
+> temporary hosting, not for real use.
+
 ## Quick path (a Linux server with Docker)
 
 ```bash

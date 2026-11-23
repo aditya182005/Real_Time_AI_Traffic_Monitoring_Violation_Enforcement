@@ -1,0 +1,22 @@
+# Dependencies for Streamlit Community Cloud ONLY (docs/STREAMLIT_CLOUD.md).
+# Community Cloud uses the requirements file next to the entrypoint
+# (app/main.py) before the one in the repository root, so this file is used
+# there while Docker, CI and local installs keep using ../requirements.txt.
+# Keep the packages in step with ../requirements.txt (a test checks this).
+#
+# CPU-only PyTorch comes first: the default wheel pulls in gigabytes of CUDA,
+# which does not fit on the free tier. Everything else still comes from PyPI.
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+torch
+torchvision
+ultralytics>=8.1
+supervision>=0.20,<0.31
+opencv-python-headless>=4.8
+streamlit>=1.37
+numpy
+pandas
+pillow
+python-dotenv
+twilio>=8.0
+imageio-ffmpeg
