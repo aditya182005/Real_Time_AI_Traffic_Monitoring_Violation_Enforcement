@@ -59,6 +59,26 @@ def set_status(record_id, status, user, role=None, note="", address=None):
     return status
 
 
+def set_many(record_ids, status, user, role=None, note="", address=None):
+    """Approve or reject several violations. Returns ``(done, errors)``.
+
+    Each record is changed and audited on its own, so one missing id does
+    not stop the others.
+    """
+
+    done, errors = [], []
+
+    for record_id in record_ids:
+        try:
+            set_status(record_id, status, user, role=role, note=note,
+                       address=address)
+            done.append(int(record_id))
+        except ReviewError as exc:
+            errors.append((int(record_id), str(exc)))
+
+    return done, errors
+
+
 def counts(df):
     """{'pending': n, 'approved': n, 'rejected': n} for a violations frame."""
 

@@ -1,4 +1,5 @@
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,6 +9,9 @@ import cv2
 from app import paths
 from app.alerts import telegram_alert, twilio_alert
 from app.annotate import (
+    draw_trail,
+    draw_zone,
+    explain,
     EMERGENCY,
     VEHICLE,
     VIOLATION,
@@ -17,6 +21,12 @@ from app.annotate import (
 )
 from app import plates
 from app.violation.collision_logic import CollisionHeuristic
+from app.violation.zones import (
+    CrossingMonitor,
+    ParkingMonitor,
+    RestrictedLane,
+    TripleRiding,
+)
 from app.violation.helmet import HelmetChecker
 from app.violation.red_light import RedLightDetector
 from app.violation.signal import SignalSimulator
@@ -24,6 +34,7 @@ from app.violation.speed_estimator import SpeedEstimator
 from app.violation.violation_logger import (
     log_collision_event,
     log_density_samples,
+    log_vehicle_counts,
     log_priority_event,
     log_violation,
 )
@@ -79,6 +90,7 @@ class VideoSummary:
     density: list = field(default_factory=list)      # (second, avg vehicles)
     emergency_events: list = field(default_factory=list)
     signal_description: str = ""
+    vehicle_counts: dict = field(default_factory=dict)   # class -> distinct vehicles
 
     def violations_of(self, kind):
         return [v for v in self.violations if v["type"] == kind]
@@ -124,6 +136,7 @@ class TrafficVideoProcessor:
         speed=None,          # SpeedConfig, or None to skip speed checks
         wrong_way=None,      # WrongWayConfig, or None to skip
         helmet_detector=None,  # object with detect(frame) -> heads
+        zones=None,          # ZoneConfig (parking, crossing, lane, triple)
         signal_output=None,  # object with send(state), e.g. an Arduino
         detect_collisions=False,
         send_collision_alerts=False,
@@ -156,6 +169,7 @@ class TrafficVideoProcessor:
         self.speed = speed
         self.wrong_way = wrong_way
         self.helmet_detector = helmet_detector
+        self.zones = zones
         self.signal_output = signal_output
         self.detect_collisions = detect_collisions
         self.send_collision_alerts = send_collision_alerts
@@ -170,6 +184,23 @@ class TrafficVideoProcessor:
             if evidence_dir
             else paths.OUTPUT_DIR / "violations"
         )
+
+    def _normal_wait(self, tick, fps):
+        """Seconds the ordinary signal would have kept this approach red.
+
+        0 when it was already green, None when it cannot be known (a lamp
+        read from the video, an adaptive signal, or one that never turns
+        green). Used to report how much waiting the priority saved.
+        """
+
+        if not getattr(self.signal, "predictable", False):
+            return None
+
+        for step in range(0, 181):
+            if self.signal.state_at(tick + int(step * fps), fps) == "GREEN":
+                return float(step)
+
+        return None
 
     def _in_roi(self, bbox):
         if self.emergency_roi is None:
@@ -290,6 +321,24 @@ class TrafficVideoProcessor:
         collision_heuristic = (
             CollisionHeuristic() if self.detect_collisions else None
         )
+        zones = self.zones if (self.zones and self.zones.active) else None
+        parking = (
+            ParkingMonitor(zones.no_parking["polygon"],
+                           zones.no_parking["seconds"])
+            if zones and zones.no_parking else None)
+        crossing = (
+            CrossingMonitor(zones.crossing["y_top"], zones.crossing["y_bottom"])
+            if zones and zones.crossing else None)
+        lane_rule = (
+            RestrictedLane(zones.restricted_lane["polygon"],
+                           zones.restricted_lane["allowed"])
+            if zones and zones.restricted_lane else None)
+        triple = (
+            TripleRiding()
+            if zones and zones.triple_riding
+            and self.helmet_detector is not None else None)
+        trails = {}             # track_id -> recent (x, y) positions
+        seen_ids = {}           # track_id -> class (for the class counts)
         plate_votes = (
             plates.PlateVotes() if self.plate_reader is not None else None
         )
@@ -379,7 +428,9 @@ class TrafficVideoProcessor:
                     if not emergency_logged:
                         emergency_logged = True
                         best = max(emergencies, key=lambda e: e["confidence"])
+                        wait = self._normal_wait(tick, fps)
                         summary.emergency_events.append({
+                            "normal_wait_seconds": wait,
                             "frame": frame_number,
                             "time_seconds": seconds,
                             "class_name": best["class_name"],
@@ -391,10 +442,22 @@ class TrafficVideoProcessor:
                             log_priority_event(
                                 best["class_name"], best["confidence"],
                                 camera_id=self.camera_id, source=source,
+                                normal_wait_seconds=wait,
                             )
 
                 elif not emergencies:
                     emergency_logged = False
+
+                observe_queue = getattr(self.signal, "observe_queue", None)
+
+                if observe_queue is not None:
+                    # Vehicles waiting just before the stop line (the
+                    # adaptive signal sizes the next green from this).
+                    depth = 0.4 * frame.shape[0]
+                    observe_queue(sum(
+                        1 for box in tracked.xyxy
+                        if self.stop_line_y - depth <= box[3] <= self.stop_line_y
+                    ))
 
                 observe = getattr(self.signal, "observe", None)
 
@@ -409,7 +472,7 @@ class TrafficVideoProcessor:
 
                 heads = []
 
-                if helmet_checker is not None:
+                if helmet_checker is not None or triple is not None:
                     try:
                         heads = self.helmet_detector.detect(frame)
                     except Exception as exc:  # never stop the analysis
@@ -481,6 +544,41 @@ class TrafficVideoProcessor:
                         )
                         flagged = True
 
+                    if track_id != -1:
+                        seen_ids.setdefault(track_id, class_name)
+                        trail = trails.setdefault(track_id, [])
+                        trail.append((center_x, bbox[3]))
+                        del trail[:-40]
+
+                        checks = []
+
+                        if parking is not None:
+                            checks.append((
+                                "illegal_parking",
+                                parking.update(track_id, bbox, seconds)))
+
+                        if crossing is not None:
+                            checks.append((
+                                "crossing_encroachment",
+                                crossing.update(
+                                    track_id, bbox, signal_state, seconds)))
+
+                        if lane_rule is not None:
+                            checks.append((
+                                "wrong_lane",
+                                lane_rule.update(track_id, bbox, class_name)))
+
+                        if triple is not None and class_name == "motorcycle":
+                            checks.append((
+                                "triple_riding",
+                                triple.update(track_id, bbox, heads)))
+
+                        for kind_name, hit in checks:
+                            if hit:
+                                events.append((kind_name, track_id, bbox,
+                                               class_name, {}))
+                                flagged = True
+
                     if (
                         plate_votes is not None and track_id != -1
                         and frame_number % self.plate_every == 0
@@ -537,6 +635,21 @@ class TrafficVideoProcessor:
                 cv2.line(frame, (0, self.stop_line_y),
                          (width_now, self.stop_line_y), line_colour, 2)
 
+                if zones is not None:
+                    if zones.no_parking:
+                        draw_zone(frame, zones.no_parking["polygon"], AMBER,
+                                  "No parking")
+
+                    if zones.restricted_lane:
+                        draw_zone(frame, zones.restricted_lane["polygon"],
+                                  VIOLATION, "Restricted lane")
+
+                    if zones.crossing:
+                        cv2.rectangle(
+                            frame, (0, int(zones.crossing["y_top"])),
+                            (width_now, int(zones.crossing["y_bottom"])),
+                            AMBER, 1)
+
                 if self.speed is not None:
                     for line_y in (self.speed.line_a_y, self.speed.line_b_y):
                         cv2.line(frame, (0, line_y), (width_now, line_y),
@@ -575,6 +688,15 @@ class TrafficVideoProcessor:
 
                         plate = plate_votes.best(track_id)
 
+                    # Say why on the picture, so a reviewer can check it.
+                    evidence_frame = frame.copy()
+                    draw_trail(evidence_frame, trails.get(track_id, []))
+                    draw_banner(
+                        evidence_frame,
+                        explain(kind, signal_state, extra.get("speed_kmh")),
+                        VIOLATION, origin=(15, frame.shape[0] - 55),
+                    )
+
                     stem = (
                         f"{name_part}_{kind}_id_{track_id}"
                         f"_frame_{frame_number}"
@@ -582,7 +704,7 @@ class TrafficVideoProcessor:
                     evidence_path = self.evidence_dir / f"{stem}.jpg"
                     crop_path = self.evidence_dir / f"{stem}_crop.jpg"
 
-                    cv2.imwrite(str(evidence_path), frame)
+                    cv2.imwrite(str(evidence_path), evidence_frame)
                     cv2.imwrite(str(crop_path), crop_with_margin(clean, bbox))
 
                     inserted = None
@@ -608,6 +730,10 @@ class TrafficVideoProcessor:
                             camera_id=self.camera_id,
                             plate_text=plate[0] if plate else None,
                             plate_confidence=plate[1] if plate else None,
+                            position=(
+                                round(((bbox[0] + bbox[2]) / 2) / width, 3),
+                                round(bbox[3] / height, 3),
+                            ),
                         )
 
                     entry = {
@@ -757,6 +883,7 @@ class TrafficVideoProcessor:
         summary.frames = frame_number
         summary.processing_fps = frame_number / elapsed
         summary.duration_seconds = frame_number / fps
+        summary.vehicle_counts = dict(Counter(seen_ids.values()))
         summary.density = [
             (second, sum(counts) / len(counts))
             for second, counts in sorted(density.items())
@@ -766,6 +893,9 @@ class TrafficVideoProcessor:
             log_density_samples(
                 source or "video", summary.density, camera_id=self.camera_id
             )
+            log_vehicle_counts(
+                source or "video", summary.vehicle_counts,
+                camera_id=self.camera_id)
 
         if progress:
             progress(frame_number, total_frames)

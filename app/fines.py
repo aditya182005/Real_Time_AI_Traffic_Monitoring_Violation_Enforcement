@@ -22,8 +22,16 @@ DEMO = {
     "red_light": 1000,
     "wrong_way": 1500,
     "no_helmet": 1000,
+    "illegal_parking": 500,
+    "crossing_encroachment": 500,
+    "wrong_lane": 1000,
+    "triple_riding": 1000,
     "speeding": {"base": 500, "per_10_kmh": 100},
 }
+
+
+FLAT = ("red_light", "wrong_way", "no_helmet", "illegal_parking",
+        "crossing_encroachment", "wrong_lane", "triple_riding")
 
 
 class FineConfigError(ValueError):
@@ -55,10 +63,14 @@ def parse(data):
         "red_light": DEMO["red_light"],
         "wrong_way": DEMO["wrong_way"],
         "no_helmet": DEMO["no_helmet"],
+        "illegal_parking": DEMO["illegal_parking"],
+        "crossing_encroachment": DEMO["crossing_encroachment"],
+        "wrong_lane": DEMO["wrong_lane"],
+        "triple_riding": DEMO["triple_riding"],
         "speeding": dict(DEMO["speeding"]),
     }
 
-    for key in ("red_light", "wrong_way", "no_helmet"):
+    for key in FLAT:
         if key in data:
             table[key] = _amount(data[key], key)
 

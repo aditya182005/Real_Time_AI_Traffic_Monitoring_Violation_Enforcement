@@ -15,6 +15,7 @@ TABLES = {
     "violations": "violation_records",
     "density": "traffic_density",
     "priority": "priority_events",
+    "vehicle_counts": "vehicle_counts",
     "collisions": "collision_events",
     # Older databases only; no script writes here any more.
     "legacy_speed": "speed_violations",

@@ -28,6 +28,10 @@ NAMES = {
     "speeding": "Speeding",
     "wrong_way": "Driving the wrong way",
     "no_helmet": "Rider without a helmet",
+    "illegal_parking": "Illegal parking",
+    "crossing_encroachment": "Stopped on the pedestrian crossing",
+    "wrong_lane": "Wrong lane for this vehicle",
+    "triple_riding": "Three or more people on a motorcycle",
 }
 FOOTER = (
     "DEMONSTRATION DOCUMENT. Produced from an automated detection that a",

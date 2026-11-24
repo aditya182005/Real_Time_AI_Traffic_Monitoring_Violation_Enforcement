@@ -91,6 +91,8 @@ def render(data):
             st.info(f"No violations are {choice.lower()}.")
             return
 
+    _bulk_review(evidence)
+
     def describe(i):
         row = evidence.iloc[i]
         plate = row.get("plate_text")
@@ -138,6 +140,52 @@ def render(data):
             for key, value in row.items()
             if key not in ("evidence_path", "crop_path")
         })
+
+
+def _bulk_review(evidence):
+    """Decide several pending violations at once (operators and admins)."""
+
+    if not auth.can("operate") or "id" not in evidence.columns:
+        return
+
+    pending = evidence[(evidence["kind"] == "Violation")
+                       & (evidence["review"] == review.PENDING)
+                       & evidence["id"].notna()]
+
+    if pending.empty:
+        return
+
+    with st.expander(f"Bulk review ({len(pending)} pending)"):
+        labels = {
+            int(r["id"]): f"#{int(r['id'])} {r.get('violation_type', '')}, "
+                          f"track {r.get('track_id', '?')}"
+            for _, r in pending.iterrows()
+        }
+        chosen = st.multiselect(
+            "Violations", options=list(labels), format_func=labels.get,
+            key="bulk_ids")
+        note = st.text_input("Note for all (optional)", key="bulk_note")
+        approve, reject = st.columns(2)
+        decision = None
+
+        if approve.button("Approve selected", disabled=not chosen):
+            decision = review.APPROVED
+        elif reject.button("Reject selected", disabled=not chosen):
+            decision = review.REJECTED
+
+        if decision:
+            user = auth.current_user() or {}
+            done, errors = review.set_many(
+                chosen, decision, user.get("name") or "unknown",
+                role=auth.current_role(), note=note,
+                address=auth.client_address())
+
+            for record_id, message in errors:
+                st.error(f"#{record_id}: {message}")
+
+            if done:
+                st.cache_data.clear()
+                st.rerun()
 
 
 def _review_controls(row):

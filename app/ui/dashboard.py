@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from app.alerts import twilio_alert
+from app import traffic_stats
 from app.ui import analytics, theme
 from app.ui.helpers import show_df, show_records
 
@@ -191,6 +192,33 @@ def _traffic_tab(data):
         analytics.density_by_hour(density)
         .set_index("Hour (UTC)")["Avg vehicles in view"]
     )
+
+    hourly = traffic_stats.congestion_by_hour(analytics.density_by_hour(density))
+    extremes = traffic_stats.busiest_and_quietest(hourly)
+
+    if extremes:
+        c, d = st.columns(2)
+        c.metric("Quietest hour (UTC)", f"{extremes[1][0]:02d}:00",
+                 f"{extremes[1][1]:.1f} vehicles")
+        d.metric("Busiest level", traffic_stats.congestion_level(extremes[0][1]))
+
+    st.caption("Congestion by hour: vehicles in view, not road speed. "
+               "Thresholds depend on the camera (CONGESTION_MODERATE and "
+               "CONGESTION_HEAVY).")
+    st.dataframe(hourly.dropna(subset=["Level"]), hide_index=True)
+
+    totals = traffic_stats.class_totals(data.get("vehicle_counts"))
+
+    if not totals.empty:
+        st.caption("Distinct vehicles seen, by class")
+        st.bar_chart(totals.set_index("Vehicle class"))
+
+    grid = traffic_stats.heatmap_grid(data["violations"])
+
+    if grid is not None:
+        st.caption("Where violations happen in the picture (top = far from "
+                   "the camera; darker = more)")
+        st.dataframe(grid.style.background_gradient(cmap="Reds"))
 
     show_records(density, "Density samples", "traffic_density.csv",
                  "dl_density")

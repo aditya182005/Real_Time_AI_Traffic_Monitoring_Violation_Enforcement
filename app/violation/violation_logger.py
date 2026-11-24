@@ -28,6 +28,9 @@ EXTRA_COLUMNS = {
         "camera_id": "TEXT",
         "plate_text": "TEXT",
         "plate_confidence": "REAL",
+        # Where in the frame (0..1); for the heatmap. Outside the hash chain.
+        "pos_x": "REAL",
+        "pos_y": "REAL",
         # Human review (app/review.py)
         "review_status": "TEXT",
         "reviewed_by": "TEXT",
@@ -51,6 +54,8 @@ EXTRA_COLUMNS = {
         "camera_id": "TEXT",
         "source": "TEXT",
         "signal_override": "INTEGER",
+        # Seconds the normal signal would still have kept this approach red
+        "normal_wait_seconds": "REAL",
     },
     "traffic_density": {
         "camera_id": "TEXT",
@@ -97,6 +102,17 @@ def _create_table(conn):
             source TEXT,
             video_second INTEGER NOT NULL,
             vehicle_count REAL NOT NULL,
+            timestamp TEXT NOT NULL,
+            camera_id TEXT
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS vehicle_counts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT,
+            vehicle_class TEXT NOT NULL,
+            vehicle_count INTEGER NOT NULL,
             timestamp TEXT NOT NULL,
             camera_id TEXT
         )
@@ -151,8 +167,8 @@ def calculate_fine(violation_type, speed=None, speed_limit=None):
     if violation_type == "wrong_way":
         return table["wrong_way"]
 
-    if violation_type == "no_helmet":
-        return table["no_helmet"]
+    if violation_type in fines.FLAT:
+        return table[violation_type]
 
     if violation_type == "speeding":
         if speed is None or speed_limit is None:
@@ -184,6 +200,7 @@ def log_violation(
     camera_id=None,
     plate_text=None,
     plate_confidence=None,
+    position=None,
 ):
     """Insert a violation. Returns True if a new row was written.
 
@@ -243,6 +260,8 @@ def log_violation(
                 camera_id,
                 plate_text,
                 plate_confidence,
+                pos_x,
+                pos_y,
                 review_status,
                 model_version,
                 evidence_sha256,
@@ -250,7 +269,7 @@ def log_violation(
                 prev_hash,
                 record_hash
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     'pending', ?, ?, ?, ?, ?)
         """, (
             event_key,
@@ -267,6 +286,8 @@ def log_violation(
             camera_id,
             plate_text,
             plate_confidence,
+            position[0] if position else None,
+            position[1] if position else None,
             sealed["model_version"],
             sealed["evidence_sha256"],
             sealed["crop_sha256"],
@@ -305,13 +326,38 @@ def log_density_samples(source, samples, camera_id=None):
     return len(samples)
 
 
+def log_vehicle_counts(source, counts, camera_id=None):
+    """Store how many different vehicles of each class a run saw.
+
+    ``counts`` maps class name to the number of distinct tracked vehicles.
+    """
+
+    rows = [(source, name, int(n)) for name, n in sorted(counts.items()) if n]
+
+    if not rows:
+        return 0
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    with _connect() as conn:
+        _create_table(conn)
+        conn.executemany(
+            "INSERT INTO vehicle_counts (source, vehicle_class, "
+            "vehicle_count, timestamp, camera_id) VALUES (?, ?, ?, ?, ?)",
+            [(src, cls, n, timestamp, camera_id) for src, cls, n in rows])
+        conn.commit()
+
+    return len(rows)
+
+
 def log_priority_event(
     vehicle_class,
     confidence,
     track_id=-1,
     camera_id=None,
     source=None,
-    signal_override=True
+    signal_override=True,
+    normal_wait_seconds=None,
 ):
     """Record a simulated emergency-priority request.
 
@@ -325,9 +371,10 @@ def log_priority_event(
         conn.execute("""
             INSERT INTO priority_events (
                 track_id, vehicle_class, confidence,
-                event_type, timestamp, camera_id, source, signal_override
+                event_type, timestamp, camera_id, source, signal_override,
+                normal_wait_seconds
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             int(track_id),
             vehicle_class,
@@ -336,7 +383,8 @@ def log_priority_event(
             datetime.now(timezone.utc).isoformat(),
             camera_id,
             source,
-            1 if signal_override else 0
+            1 if signal_override else 0,
+            normal_wait_seconds,
         ))
 
         conn.commit()

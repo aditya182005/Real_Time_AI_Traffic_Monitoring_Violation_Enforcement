@@ -82,7 +82,7 @@ class VideoSettings:
 
     camera_id: str = "CAM-01"
     stop_line_pct: float = 60
-    signal_mode: str = "red"            # red | green | cycle | lamp
+    signal_mode: str = "red"            # red | green | cycle | lamp | adaptive
     red_seconds: float = 10
     green_seconds: float = 10
     lamp_roi_pct: tuple = (0, 0, 0, 0)   # x1,y1,x2,y2 of the lamp (signal_mode "lamp")
@@ -148,6 +148,11 @@ def validate_settings(settings):
 
 
 def build_signal(settings):
+    if settings.signal_mode == "adaptive":
+        from app.signals.loop import AdaptiveSignal
+
+        return AdaptiveSignal()
+
     if settings.signal_mode == "lamp":
         return LampSignal(settings.lamp_roi_pct)
 
@@ -165,7 +170,7 @@ def build_signal(settings):
 def build_processor(settings, width, height, detector, tracker,
                     emergency_detector, evidence_dir, plate_reader=None,
                     plate_locator=None, helmet_detector=None,
-                    signal_output=None):
+                    signal_output=None, zones=None):
     """Create a configured ``TrafficVideoProcessor`` for a video's size."""
 
     from app.video_processor import (
@@ -210,6 +215,7 @@ def build_processor(settings, width, height, detector, tracker,
         helmet_detector=(
             helmet_detector if settings.check_helmet else None),
         signal_output=signal_output,
+        zones=zones,
         detect_collisions=settings.check_collisions,
         send_collision_alerts=(
             settings.check_collisions and settings.send_alerts

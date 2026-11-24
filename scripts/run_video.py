@@ -27,7 +27,12 @@ if str(ROOT) not in sys.path:   # lets "python scripts/run_video.py" import app
     sys.path.insert(0, str(ROOT))
 
 from app import live, paths, plates
-from app.analysis import VideoSettings, build_processor, validate_settings
+from app.analysis import (
+    VideoSettings,
+    build_processor,
+    pixel_row,
+    validate_settings,
+)
 
 OUTPUT_DIR = paths.OUTPUT_DIR
 DEFAULT_OUTPUT = "outputs/detections/tracked_traffic.mp4"
@@ -68,10 +73,11 @@ def build_parser(add_help=True):
         help="Stop line position, percent from the top of the frame."
     )
     signal.add_argument(
-        "--signal", type=str.lower, choices=["red", "green", "cycle", "lamp"],
+        "--signal", type=str.lower, choices=["red", "green", "cycle", "lamp", "adaptive"],
         default="red", help="Simulated signal for the whole run, or "
                             "'lamp' to read it from the lamp in the video "
-                            "(needs --lamp-roi)."
+                            "(needs --lamp-roi), or 'adaptive' to size the "
+                            "green from the live queue."
     )
     signal.add_argument(
         "--lamp-roi", default=None, metavar="X1,Y1,X2,Y2",
@@ -113,6 +119,17 @@ def build_parser(add_help=True):
         "--helmet", action="store_true",
         help="Flag motorcycle riders without a helmet "
              "(needs your trained models/helmet.pt)."
+    )
+    other.add_argument(
+        "--zones", default=None, metavar="FILE",
+        help="JSON file of zone rules: no-parking, crossing, restricted "
+             "lane, triple riding (see app/violation/zones.py)."
+    )
+    other.add_argument(
+        "--calibration", default=None, metavar="FILE",
+        help="Use a calibration file from scripts/calibrate_speed.py: the "
+             "distance between the two speed lines is computed from it "
+             "instead of --distance-m."
     )
     other.add_argument(
         "--arduino-port", default=None, metavar="PORT",
@@ -234,6 +251,20 @@ def run(args, parser, detector=None, tracker=None, emergency_detector=None,
     if problems:
         parser.error(" ".join(problems))
 
+    zones = None
+
+    if args.zones:
+        from app.violation.zones import ZoneConfig, ZoneConfigError
+
+        try:
+            zones = ZoneConfig.load(args.zones)
+        except ZoneConfigError as exc:
+            parser.error(str(exc))
+
+        if zones.triple_riding and not args.helmet:
+            parser.error("triple_riding in the zones file needs --helmet "
+                         "(it counts the heads that model finds).")
+
     if args.send_alerts and not args.collisions:
         parser.error("--send-alerts needs --collisions.")
 
@@ -319,11 +350,27 @@ def run(args, parser, detector=None, tracker=None, emergency_detector=None,
         width, height = video_size(args.input)
         label = Path(args.input).name
 
+    if args.calibration:
+        from app.calibration import Calibration, CalibrationError
+
+        try:
+            calibration = Calibration.load(args.calibration)
+        except CalibrationError as exc:
+            parser.error(str(exc))
+
+        settings.speed_distance_m = calibration.distance_between_rows(
+            pixel_row(height, settings.speed_line_a_pct),
+            pixel_row(height, settings.speed_line_b_pct),
+        )
+        print(f"Calibrated distance between speed lines: "
+              f"{settings.speed_distance_m:.2f} m")
+
     processor = build_processor(
         settings, width, height, detector, tracker, emergency_detector,
         OUTPUT_DIR / "violations" / run_id,
         plate_reader=plate_reader, plate_locator=plate_locator,
         helmet_detector=helmet_detector, signal_output=signal_output,
+        zones=zones,
     )
 
     options = dict(

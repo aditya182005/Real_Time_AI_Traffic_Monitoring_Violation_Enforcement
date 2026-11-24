@@ -91,6 +91,7 @@ a web dashboard.
   document, not a legal notice.
 * **Alert on Telegram too.** Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`
   and collision alerts also go to a chat, with the evidence picture.
+* **More violations and tools.** Zone rules (parking, crossing, lane, triple riding), real-footage benchmark, click-to-calibrate speed, analytics and a daily integrity digest: see `docs/NEW_VIOLATIONS_AND_ANALYTICS.md` and `docs/BENCHMARK.md`.
 * **Spot riders without a helmet (needs your own model).** `--helmet` with a
   trained `models/helmet.pt`; no helmet model ships with the project.
 * **Try adaptive signal timing.** `python -m app.signals.adaptive` compares fixed
