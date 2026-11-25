@@ -324,7 +324,7 @@ docker compose exec traffic-agent python scripts/check_setup.py --full --product
 ```
 
 This starts the dashboard, a daily maintenance job (integrity check, retention,
-backup) and HTTPS. Step by step: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). HTTPS, sign-in, backups and security notes: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+backup) and HTTPS. Step by step: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). A free demo link without a server: [docs/STREAMLIT_CLOUD.md](docs/STREAMLIT_CLOUD.md). HTTPS, sign-in, backups and security notes: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ### Something went wrong?
 

@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
 
 import streamlit as st  # noqa: E402
 
+from app import paths  # noqa: E402
 from app.ui import about, admin, alerts, analytics, dashboard  # noqa: E402
 from app.ui import auth, evidence, filters, live_page, theme, upload  # noqa: E402
 from app.ui.data import DB_PATH, load_all  # noqa: E402
@@ -89,6 +90,10 @@ with st.sidebar:
     page = PAGES[choice]
 
     auth.logout_button()
+
+    if paths.demo_hosting():
+        st.warning("Demo hosting: records, evidence and uploads are erased "
+                   "whenever the app restarts or goes to sleep.")
 
     st.divider()
     st.caption(

@@ -122,3 +122,48 @@ class EvidenceConfinementTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DemoHostingTests(unittest.TestCase):
+    def test_flag(self):
+        for value, expected in (("1", True), ("true", True), ("YES", True),
+                                ("", False), ("0", False), ("no", False)):
+            with mock.patch.dict(os.environ, {"DEMO_HOSTING": value}):
+                self.assertEqual(paths.demo_hosting(), expected, value)
+
+
+class CloudRequirementsTests(unittest.TestCase):
+    """app/requirements.txt (Streamlit Cloud) must not drift from requirements.txt."""
+
+    @staticmethod
+    def packages(path):
+        import re
+
+        out = {}
+
+        for line in Path(path).read_text().splitlines():
+            line = line.split("#")[0].strip()
+
+            if not line or line.startswith("-"):
+                continue
+
+            name = re.split(r"[<>=!~ ]", line, 1)[0].lower()
+            out[name] = line
+
+        return out
+
+    def test_same_packages_apart_from_torch_and_headless_opencv(self):
+        root = self.packages(paths.ROOT / "requirements.txt")
+        cloud = self.packages(paths.ROOT / "app" / "requirements.txt")
+        root["opencv-python-headless"] = root.pop("opencv-python")
+
+        self.assertEqual(set(cloud) - {"torch", "torchvision"}, set(root))
+        self.assertEqual(cloud["supervision"], root["supervision"])   # the pin
+        self.assertEqual(cloud["opencv-python-headless"].split(">=")[1],
+                         root["opencv-python-headless"].split(">=")[1])
+
+    def test_cloud_file_uses_the_cpu_torch_index(self):
+        text = (paths.ROOT / "app" / "requirements.txt").read_text()
+
+        self.assertIn("--index-url https://download.pytorch.org/whl/cpu", text)
+        self.assertIn("--extra-index-url https://pypi.org/simple", text)
