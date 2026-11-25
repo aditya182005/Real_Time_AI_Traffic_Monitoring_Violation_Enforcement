@@ -165,6 +165,10 @@ EVENT_NAMES = {
     "speeding": "Speeding",
     "wrong_way": "Wrong way",
     "no_helmet": "No helmet",
+    "illegal_parking": "Illegal parking",
+    "crossing_encroachment": "On crossing",
+    "wrong_lane": "Wrong lane",
+    "triple_riding": "Triple riding",
 }
 
 

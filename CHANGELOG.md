@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-* Streamlit Community Cloud support for demo hosting: `app/requirements.txt` (CPU PyTorch), `packages.txt`, `deploy/streamlit_secrets.example.toml`, `DEMO_HOSTING` sidebar warning, and `docs/STREAMLIT_CLOUD.md`.
+* Credibility and operations: `scripts/benchmark.py` (precision/recall with confidence intervals on your own clips, `docs/BENCHMARK.md`), `scripts/train_helmet.py`, click-to-calibrate speed (`scripts/calibrate_speed.py`, `--calibration`), zone violations (illegal parking, crossing encroachment, wrong lane, triple riding; `--zones`), traffic analytics (class counts, congestion by hour, heatmap), bulk review, evidence overlays, daily Telegram integrity digest, `--signal adaptive` driven by live queue counts, and emergency wait-time saved. See `docs/NEW_VIOLATIONS_AND_ANALYTICS.md`.
 
 * Deployment readiness: the trained `models/emergency_vehicle.pt` is now in the repository; `docker compose --profile https up -d` adds HTTPS (Caddy, automatic certificate); a `maintenance` container runs `python -m app.maintenance` daily (integrity check with head-hash log, retention, backup with rotation); `scripts/check_setup.py --production` checks sign-in, `APP_ENV`, domain, retention, fines and backups; the dashboard port is published on `127.0.0.1` by default (`BIND_ADDRESS`); CI validates the compose files and runs the maintenance job.
 

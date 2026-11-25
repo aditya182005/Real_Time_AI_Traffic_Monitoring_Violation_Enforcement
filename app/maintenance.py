@@ -34,7 +34,7 @@ from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
-from app import housekeeping, integrity, paths, privacy
+from app import digest, housekeeping, integrity, paths, privacy
 
 ARCHIVE = re.compile(r"^traffic-data-\d{8}-\d{6}\.tgz$")
 DEFAULT_KEEP = 7
@@ -164,6 +164,7 @@ def run_once(include_outputs=True, now=None):
         uploads, housekeeping.retention_days()))
     archive = make_backup(include_outputs=include_outputs, now=now)
     summary["backup"] = str(archive) if archive else None
+    summary["digest"] = digest.send(now=now)
 
     return summary
 
@@ -183,6 +184,7 @@ def describe(summary):
 
     lines.append(f"Old upload folders removed: {summary['runs_removed']}")
     lines.append(f"Backup: {summary['backup'] or 'nothing to back up yet'}")
+    lines.append(f"Daily digest: {summary.get('digest', '-')}")
 
     return "\n".join(lines)
 

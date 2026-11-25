@@ -97,3 +97,54 @@ def draw_calibration(frame, stop_line_y, speed_lines=None, lane=None):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, amber, 2, cv2.LINE_AA)
 
     return preview
+
+
+# -- explanations on the evidence picture ----------------------------------
+
+REASONS = {
+    "red_light": "Crossed the stop line while the signal was {signal}",
+    "speeding": "Measured {speed:.0f} km/h between the two amber lines",
+    "wrong_way": "Travelled against the expected direction of traffic",
+    "no_helmet": "Rider without a helmet in several frames",
+    "illegal_parking": "Stayed in the no-parking zone",
+    "crossing_encroachment": "Stopped on the pedestrian crossing at red",
+    "wrong_lane": "Vehicle type not allowed in this lane",
+    "triple_riding": "Three or more people on one motorcycle",
+}
+
+
+def explain(kind, signal_state=None, speed_kmh=None):
+    """One plain sentence saying why the system flagged this vehicle."""
+
+    text = REASONS.get(kind, kind.replace("_", " "))
+
+    return text.format(signal=signal_state or "RED", speed=speed_kmh or 0.0)
+
+
+def draw_trail(frame, points, colour=(0, 215, 255)):
+    """Draw where a vehicle has been, oldest to newest."""
+
+    for a, b in zip(points, points[1:]):
+        cv2.line(frame, (int(a[0]), int(a[1])), (int(b[0]), int(b[1])),
+                 colour, 2, cv2.LINE_AA)
+
+    if points:
+        cv2.circle(frame, (int(points[-1][0]), int(points[-1][1])), 4,
+                   colour, -1)
+
+
+def draw_zone(frame, polygon, colour, label=None):
+    """Outline a zone polygon with a light fill."""
+
+    import numpy as np
+
+    pts = np.array(polygon, dtype=np.int32).reshape(-1, 1, 2)
+    layer = frame.copy()
+    cv2.fillPoly(layer, [pts], colour)
+    cv2.addWeighted(layer, 0.18, frame, 0.82, 0, frame)
+    cv2.polylines(frame, [pts], True, colour, 2, cv2.LINE_AA)
+
+    if label:
+        x, y = int(pts[0][0][0]), int(pts[0][0][1])
+        cv2.putText(frame, label, (x + 4, y + 18), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.55, colour, 2, cv2.LINE_AA)

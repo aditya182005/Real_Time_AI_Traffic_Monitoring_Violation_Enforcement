@@ -113,3 +113,17 @@ No helmet model is included and none is claimed to be accurate. To use
 3. Run your own motorbike footage through `scripts/run_video.py --helmet` and
    check the flagged records on the Evidence page before trusting it. Wrong
    flags are fines issued to the wrong person, so keep the human review on.
+
+### Training it with the script
+
+```
+python scripts/train_helmet.py --epochs 40 --device 0
+```
+
+Put a YOLO-format dataset in `data/helmet/` (`data.yaml`, `images/`,
+`labels/`). The script refuses to start unless the classes include a helmet
+and a no-helmet (or `head`) class, trains like the emergency model, installs
+`models/helmet.pt` and prints validation scores. Those scores describe the
+public dataset, not your road: run
+`python scripts/benchmark.py --clips clips --truth clips/truth.csv -- --helmet`
+on your own footage (see `docs/BENCHMARK.md`).
